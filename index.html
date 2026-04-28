@@ -1,0 +1,1180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ASCII Art Generator</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,300;0,400;0,500;0,600;1,400&family=Space+Grotesk:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+/* ── Variables ────────────────────────────────────────────────────────── */
+:root {
+  --amber:       #f5a623;
+  --amber-dim:   #c47d0e;
+  --amber-glow:  rgba(245,166,35,0.12);
+  --amber-glow2: rgba(245,166,35,0.22);
+  --amber-glow3: rgba(245,166,35,0.04);
+  --bg-0: #07070a;
+  --bg-1: #0d0d0f;
+  --bg-2: #131310;
+  --bg-3: #1a1a16;
+  --bg-4: #22221d;
+  --border:       rgba(245,166,35,0.16);
+  --border-mid:   rgba(245,166,35,0.28);
+  --border-hi:    rgba(245,166,35,0.5);
+  --text:         #e8d5a3;
+  --text-dim:     rgba(232,213,163,0.5);
+  --text-muted:   rgba(232,213,163,0.25);
+  --green: #4ade80;
+  --sidebar-w: 320px;
+}
+
+/* Dynamic border colors based on accent */
+:root {
+  --border:       rgba(var(--amber-rgb, 245,166,35),0.16);
+  --border-mid:   rgba(var(--amber-rgb, 245,166,35),0.28);
+  --border-hi:    rgba(var(--amber-rgb, 245,166,35),0.5);
+  --text-dim:     rgba(var(--text-rgb, 232,213,163),0.5);
+  --text-muted:   rgba(var(--text-rgb, 232,213,163),0.25);
+}
+
+/* ── Reset ────────────────────────────────────────────────────────────── */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden}
+body{
+  font-family:'Space Grotesk',sans-serif;
+  background:var(--bg-0);
+  color:var(--text);
+}
+canvas,input[type=file]{display:none}
+
+/* ── CRT overlay ──────────────────────────────────────────────────────── */
+#crt{
+  position:fixed;inset:0;pointer-events:none;z-index:9000;
+  background:repeating-linear-gradient(
+    0deg,
+    transparent, transparent 2px,
+    rgba(0,0,0,0.06) 2px, rgba(0,0,0,0.06) 4px
+  );
+  animation:crt-flicker 8s ease-in-out infinite;
+}
+@keyframes crt-flicker{
+  0%,100%{opacity:1}
+  92%{opacity:1} 93%{opacity:.92} 94%{opacity:1} 96%{opacity:.95} 97%{opacity:1}
+}
+#vignette{
+  position:fixed;inset:0;pointer-events:none;z-index:8999;
+  background:radial-gradient(ellipse at center, transparent 50%, rgba(0,0,0,0.75) 100%);
+}
+
+/* ── Split layout ─────────────────────────────────────────────────────── */
+#sidebar{
+  position:fixed;left:0;top:0;bottom:0;width:var(--sidebar-w);
+  background:var(--bg-1);
+  border-right:1px solid var(--border);
+  overflow-y:auto;overflow-x:hidden;
+  display:flex;flex-direction:column;
+  z-index:10;
+  animation:slide-in-left 0.6s cubic-bezier(0.16,1,0.3,1) both;
+}
+#sidebar::-webkit-scrollbar{width:4px}
+#sidebar::-webkit-scrollbar-track{background:transparent}
+#sidebar::-webkit-scrollbar-thumb{background:var(--border-mid);border-radius:2px}
+#sidebar::-webkit-scrollbar-thumb:hover{background:var(--amber-dim)}
+
+@keyframes slide-in-left{
+  from{transform:translateX(-100%);opacity:0}
+  to{transform:translateX(0);opacity:1}
+}
+
+#main{
+  position:fixed;left:var(--sidebar-w);right:0;top:0;bottom:0;
+  display:flex;flex-direction:column;
+  background:var(--bg-0);
+  animation:slide-in-right 0.6s cubic-bezier(0.16,1,0.3,1) 0.1s both;
+}
+@keyframes slide-in-right{
+  from{transform:translateX(60px);opacity:0}
+  to{transform:translateX(0);opacity:1}
+}
+
+@media(max-width:800px){
+  #sidebar{
+    position:relative;width:100%;height:auto;border-right:none;
+    border-bottom:1px solid var(--border);
+    overflow:visible;
+  }
+  #main{position:relative;left:0;height:70vh}
+  html,body{overflow:auto;height:auto}
+}
+
+/* ── Sidebar header ───────────────────────────────────────────────────── */
+.sb-header{
+  padding:1.4rem 1.2rem 1rem;
+  border-bottom:1px solid var(--border);
+  position:relative;overflow:hidden;
+  flex-shrink:0;
+}
+.sb-header::after{
+  content:'';
+  position:absolute;bottom:0;left:0;right:0;height:1px;
+  background:linear-gradient(90deg,transparent,var(--border-hi),transparent);
+}
+
+.logo-eyebrow{
+  font-family:'IBM Plex Mono',monospace;
+  font-size:9px;letter-spacing:0.2em;
+  color:var(--amber);opacity:0.55;
+  text-transform:uppercase;margin-bottom:0.6rem;
+}
+
+.logo{
+  font-family:'IBM Plex Mono',monospace;
+  font-size:1.55rem;font-weight:600;
+  color:var(--amber);letter-spacing:-0.02em;line-height:1;
+  text-shadow:0 0 20px var(--amber-glow2),0 0 50px var(--amber-glow3);
+  position:relative;display:inline-block;
+  animation:glow-breathe 4s ease-in-out infinite;
+  transition:all 0.3s ease;
+}
+@keyframes glow-breathe{
+  0%,100%{text-shadow:0 0 20px var(--amber-glow2),0 0 50px var(--amber-glow3)}
+  50%{text-shadow:0 0 30px rgba(var(--amber),0.75),0 0 70px rgba(var(--amber),0.35),0 0 120px rgba(var(--amber),0.1)}
+}
+@keyframes logo-generating{
+  0%{text-shadow:0 0 10px currentColor,0 0 20px currentColor,0 0 40px currentColor}
+  50%{text-shadow:0 0 20px currentColor,0 0 40px currentColor,0 0 80px currentColor,0 0 120px currentColor}
+  100%{text-shadow:0 0 10px currentColor,0 0 20px currentColor,0 0 40px currentColor}
+}
+.logo.generating{
+  animation:logo-generating 0.6s ease-in-out;
+  filter:brightness(1.3);
+}
+
+/* Glitch on logo */
+.logo::before,.logo::after{
+  content:attr(data-text);
+  position:absolute;inset:0;
+  font-family:'IBM Plex Mono',monospace;
+  font-size:inherit;font-weight:inherit;
+  opacity:0;
+}
+.logo::before{color:#ff4444;animation:glitch-red 6s infinite}
+.logo::after{color:#44ffff;animation:glitch-cyan 6s infinite 0.05s}
+
+@keyframes glitch-red{
+  0%,89%,100%{opacity:0;transform:none;clip-path:none}
+  90%{opacity:0.5;transform:translate(-2px,0);clip-path:polygon(0 20%,100% 20%,100% 40%,0 40%)}
+  91%{opacity:0;transform:none}
+  93%{opacity:0.4;transform:translate(2px,1px);clip-path:polygon(0 60%,100% 60%,100% 80%,0 80%)}
+  94%{opacity:0}
+}
+@keyframes glitch-cyan{
+  0%,89%,100%{opacity:0;transform:none;clip-path:none}
+  90%{opacity:0.4;transform:translate(2px,-1px);clip-path:polygon(0 30%,100% 30%,100% 50%,0 50%)}
+  91%{opacity:0}
+  93%{opacity:0.35;transform:translate(-1px,0);clip-path:polygon(0 65%,100% 65%,100% 85%,0 85%)}
+  94%{opacity:0}
+}
+
+.logo-sub{
+  font-family:'IBM Plex Mono',monospace;
+  font-size:10px;color:var(--text-muted);
+  letter-spacing:0.1em;margin-top:0.35rem;
+  display:block;
+}
+
+/* ── Sidebar sections ─────────────────────────────────────────────────── */
+/* ── Sidebar sections ─────────────────────────────────────────────────────── */
+.sb-section{
+  padding:1rem 1.2rem;
+  border-bottom:1px solid var(--border);
+  flex-shrink:0;
+}
+.sb-section.scrollable{
+  flex:1;overflow-y:auto;overflow-x:hidden;
+  padding:0;
+  border-bottom:1px solid var(--border);
+}
+.sb-section.scrollable::-webkit-scrollbar{width:4px}
+.sb-section.scrollable::-webkit-scrollbar-track{background:transparent}
+.sb-section.scrollable::-webkit-scrollbar-thumb{background:var(--border-mid);border-radius:2px}
+.sb-section.scrollable::-webkit-scrollbar-thumb:hover{background:var(--amber-dim)}
+.sb-subsection{
+  padding:1rem 1.2rem;
+  border-bottom:1px solid var(--border);
+}
+.sb-subsection:last-child{border-bottom:none}
+.sb-section.fixed{flex-shrink:0}
+.sb-section:last-child{border-bottom:none}
+
+.section-label{
+  font-family:'IBM Plex Mono',monospace;
+  font-size:9px;letter-spacing:0.18em;
+  color:var(--amber);opacity:0.6;
+  text-transform:uppercase;
+  margin-bottom:0.85rem;
+  display:flex;align-items:center;gap:0.5rem;
+}
+.section-label::after{
+  content:'';flex:1;height:1px;
+  background:linear-gradient(90deg,var(--border),transparent);
+}
+
+/* ── Drop zone ────────────────────────────────────────────────────────── */
+#drop-zone{
+  border:1px dashed var(--border-mid);border-radius:3px;
+  padding:1.8rem 1rem;text-align:center;cursor:pointer;
+  transition:border-color 0.25s,background 0.25s,transform 0.2s;
+  background:var(--bg-2);user-select:none;position:relative;overflow:hidden;
+}
+#drop-zone::before{
+  content:'';
+  position:absolute;inset:0;
+  background:linear-gradient(135deg,var(--amber-glow3) 0%,transparent 60%);
+  opacity:0;transition:opacity 0.3s;
+}
+#drop-zone:hover::before{opacity:1}
+#drop-zone:hover{border-color:var(--amber)}
+#drop-zone.drag-over{
+  border-color:var(--amber);
+  background:var(--amber-glow2);
+  transform:scale(1.02);
+}
+.up-icon{
+  width:28px;height:28px;color:var(--amber);
+  margin:0 auto 0.7rem;opacity:0.45;
+  transition:opacity 0.2s,transform 0.2s;
+}
+#drop-zone:hover .up-icon{opacity:0.75;transform:translateY(-2px)}
+.up-title{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--text);margin-bottom:0.3rem;letter-spacing:0.04em}
+.up-sub{font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--text-muted);line-height:1.8}
+
+/* ── Preview ──────────────────────────────────────────────────────────── */
+#preview-wrap{
+  display:none;margin-top:0.75rem;
+  border:1px solid var(--border);border-radius:3px;overflow:hidden;
+  animation:fade-in 0.4s ease;
+}
+@keyframes fade-in{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+#preview-img{width:100%;display:block;max-height:160px;object-fit:contain;background:#000}
+.preview-bar{
+  padding:4px 8px;background:var(--bg-3);
+  border-top:1px solid var(--border);
+  font-family:'IBM Plex Mono',monospace;font-size:9px;
+  color:var(--amber);letter-spacing:0.05em;
+  display:flex;justify-content:space-between;
+}
+
+/* ── Controls ─────────────────────────────────────────────────────────── */
+.cg{margin-bottom:1rem}
+.cg:last-child{margin-bottom:0}
+
+.cl{
+  display:flex;justify-content:space-between;align-items:center;
+  font-family:'IBM Plex Mono',monospace;font-size:9px;
+  letter-spacing:0.1em;color:var(--text-dim);
+  text-transform:uppercase;margin-bottom:0.4rem;
+}
+.cv{color:var(--amber);font-weight:500;font-size:10px}
+
+input[type=range]{
+  width:100%;-webkit-appearance:none;
+  height:2px;border-radius:1px;outline:none;cursor:pointer;
+  background:linear-gradient(90deg, var(--amber) var(--pct,50%), var(--border-mid) var(--pct,50%));
+  transition:box-shadow 0.15s;
+}
+input[type=range]:focus{box-shadow:0 0 0 2px var(--amber-glow)}
+input[type=range]::-webkit-slider-thumb{
+  -webkit-appearance:none;width:12px;height:12px;border-radius:50%;
+  background:var(--amber);cursor:pointer;
+  box-shadow:0 0 7px var(--amber-glow2);
+  transition:transform 0.12s,box-shadow 0.12s;
+}
+input[type=range]:hover::-webkit-slider-thumb{
+  transform:scale(1.3);box-shadow:0 0 14px var(--amber);
+}
+input[type=range]:active::-webkit-slider-thumb{
+  transform:scale(1.15);
+}
+
+select,input[type=text]{
+  width:100%;padding:6px 8px;
+  background:var(--bg-3);border:1px solid var(--border);
+  border-radius:3px;color:var(--text);
+  font-family:'IBM Plex Mono',monospace;font-size:10px;
+  outline:none;transition:border-color 0.2s,box-shadow 0.2s;
+  -webkit-appearance:none;
+}
+select{
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23f5a623'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 9px center;padding-right:26px;
+}
+select:focus,input[type=text]:focus{
+  border-color:var(--amber);box-shadow:0 0 0 2px var(--amber-glow);
+}
+select option{background:var(--bg-3);color:var(--text)}
+
+/* Toggle row */
+.tr{display:flex;gap:0.35rem}
+.tb{
+  flex:1;padding:5px 4px;border:1px solid var(--border);border-radius:3px;
+  background:var(--bg-3);color:var(--text-dim);cursor:pointer;
+  font-family:'IBM Plex Mono',monospace;font-size:9px;
+  text-align:center;transition:all 0.15s;letter-spacing:0.04em;text-transform:uppercase;
+}
+.tb.active{border-color:var(--amber);color:var(--amber);background:var(--amber-glow)}
+.tb:hover:not(.active){border-color:var(--border-mid);color:var(--text)}
+
+/* Preset chips */
+.pc-row{display:flex;flex-wrap:wrap;gap:0.3rem}
+.pc{
+  padding:3px 8px;border:1px solid var(--border);border-radius:2px;
+  background:transparent;color:var(--text-muted);cursor:pointer;
+  font-family:'IBM Plex Mono',monospace;font-size:9px;
+  transition:all 0.15s;letter-spacing:0.03em;
+}
+.pc:hover{border-color:var(--amber);color:var(--amber);background:var(--amber-glow)}
+
+/* Section divider */
+.sdiv{height:1px;background:linear-gradient(90deg,transparent,var(--border-mid),transparent);margin:0.85rem 0}
+
+/* Convert button */
+#convert-btn{
+  width:100%;padding:0.65rem;
+  background:linear-gradient(135deg,var(--amber) 0%,var(--amber-dim) 100%);
+  color:#080808;border:none;border-radius:3px;
+  font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;
+  letter-spacing:0.14em;text-transform:uppercase;cursor:pointer;
+  transition:all 0.2s;position:relative;overflow:hidden;
+}
+#convert-btn::before{
+  content:'';position:absolute;inset:0;
+  background:linear-gradient(180deg,rgba(255,255,255,0.14) 0%,transparent 100%);
+  pointer-events:none;
+}
+/* Shimmer sweep on hover */
+#convert-btn::after{
+  content:'';position:absolute;top:0;left:-100%;
+  width:60%;height:100%;
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,0.25),transparent);
+  transition:left 0.4s ease;
+  pointer-events:none;
+}
+#convert-btn:hover::after{left:160%}
+#convert-btn:hover{
+  box-shadow:0 0 28px var(--amber-glow2),0 6px 20px rgba(0,0,0,0.5);
+  transform:translateY(-2px);
+}
+#convert-btn:active{transform:translateY(0);box-shadow:none}
+#convert-btn:disabled{opacity:0.35;cursor:not-allowed;transform:none;box-shadow:none}
+#convert-btn:disabled::after{display:none}
+
+/* ── Staggered entrance for controls ──────────────────────────────────── */
+.sb-section{animation:fade-up 0.5s ease both}
+.sb-section:nth-child(1){animation-delay:0.15s}
+.sb-section:nth-child(2){animation-delay:0.25s}
+.sb-section:nth-child(3){animation-delay:0.35s}
+.sb-section:nth-child(4){animation-delay:0.45s}
+.sb-section:nth-child(5){animation-delay:0.5s}
+.sb-section:nth-child(6){animation-delay:0.55s}
+@keyframes fade-up{
+  from{opacity:0;transform:translateY(10px)}
+  to{opacity:1;transform:translateY(0)}
+}
+
+/* ── Main / Output ────────────────────────────────────────────────────── */
+#out-topbar{
+  padding:0.5rem 1rem;
+  border-bottom:1px solid var(--border);
+  background:var(--bg-1);
+  display:flex;align-items:center;gap:0.5rem;
+  flex-shrink:0;
+  position:relative;
+}
+#out-topbar::after{
+  content:'';position:absolute;bottom:0;left:0;right:0;height:1px;
+  background:linear-gradient(90deg,transparent,var(--border-hi),transparent);
+  animation:border-scan 4s ease-in-out infinite;
+}
+@keyframes border-scan{
+  0%,100%{opacity:0.4}50%{opacity:1}
+}
+
+.out-led{width:7px;height:7px;border-radius:50%}
+.out-led.idle{background:var(--text-muted)}
+.out-led.amber{
+  background:var(--amber);
+  box-shadow:0 0 7px var(--amber),0 0 14px var(--amber-glow2);
+  animation:led-amber 2.5s ease-in-out infinite;
+}
+.out-led.green{
+  background:var(--green);
+  box-shadow:0 0 7px var(--green),0 0 14px rgba(74,222,128,0.4);
+  animation:led-green 1.8s ease-in-out infinite;
+}
+@keyframes led-amber{0%,100%{opacity:1}50%{opacity:0.35}}
+@keyframes led-green{0%,100%{box-shadow:0 0 7px var(--green),0 0 14px rgba(74,222,128,0.4)}50%{box-shadow:0 0 12px var(--green),0 0 24px rgba(74,222,128,0.6)}}
+
+.out-title{font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.14em;color:var(--amber);text-transform:uppercase;opacity:0.75}
+.out-meta{font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--text-muted);margin-left:auto;letter-spacing:0.05em}
+
+/* Toolbar */
+#out-toolbar{
+  padding:0.45rem 0.9rem;
+  border-bottom:1px solid var(--border);
+  display:flex;align-items:center;gap:0.35rem;
+  background:var(--bg-2);flex-shrink:0;flex-wrap:wrap;
+}
+.t-btn{
+  display:flex;align-items:center;gap:4px;
+  padding:4px 10px;border:1px solid var(--border);border-radius:3px;
+  background:transparent;color:var(--text-dim);
+  font-family:'IBM Plex Mono',monospace;font-size:9px;
+  letter-spacing:0.05em;cursor:pointer;transition:all 0.15s;
+  text-transform:uppercase;white-space:nowrap;
+  position:relative;overflow:hidden;
+}
+.t-btn::after{
+  content:'';position:absolute;inset:0;
+  background:var(--amber-glow);opacity:0;transition:opacity 0.15s;
+}
+.t-btn:hover{border-color:var(--amber);color:var(--amber)}
+.t-btn:hover::after{opacity:1}
+.t-btn svg{width:11px;height:11px;flex-shrink:0}
+/* Click flash */
+.t-btn:active{background:var(--amber-glow2)}
+.tsep{flex:1}
+
+.s-pill{
+  padding:2px 8px;border-radius:2px;
+  font-family:'IBM Plex Mono',monospace;font-size:8px;
+  letter-spacing:0.08em;text-transform:uppercase;border:1px solid;
+}
+.s-idle{color:var(--text-muted);border-color:var(--border)}
+.s-ok{color:var(--green);border-color:rgba(74,222,128,0.3);background:rgba(74,222,128,0.07)}
+.s-busy{
+  color:var(--amber);border-color:var(--border);background:var(--amber-glow);
+  animation:s-blink 0.8s step-end infinite;
+}
+@keyframes s-blink{50%{opacity:0.3}}
+
+/* ASCII output area */
+#ascii-wrap{
+  flex:1;overflow:auto;position:relative;
+  background:#000;
+}
+#ascii-wrap::-webkit-scrollbar{width:5px;height:5px}
+#ascii-wrap::-webkit-scrollbar-track{background:#000}
+#ascii-wrap::-webkit-scrollbar-thumb{background:var(--amber-glow);border-radius:3px}
+#ascii-wrap::-webkit-scrollbar-thumb:hover{background:var(--amber-glow2)}
+
+#ascii-output{
+  font-family:'IBM Plex Mono',monospace;
+  white-space:pre;display:block;margin:0;
+  line-height:1.18;letter-spacing:0.02em;
+  padding:1rem;min-height:100%;
+}
+#ascii-output.out-dark{color:var(--amber);background:#000;text-shadow:0 0 3px var(--amber-glow2)}
+#ascii-output.out-green{color:#33ff66;background:#001500;text-shadow:0 0 3px rgba(51,255,102,0.45)}
+#ascii-output.out-light{color:#1a1a0f;background:#f5f0e4;text-shadow:none}
+#ascii-output.out-white{color:#fff;background:#0d0d0d;text-shadow:none}
+
+/* reveal animation class */
+#ascii-output.reveal{animation:ascii-reveal 0.45s ease both}
+@keyframes ascii-reveal{
+  from{opacity:0;filter:blur(3px);transform:scale(0.99)}
+  to{opacity:1;filter:blur(0);transform:scale(1)}
+}
+
+/* Scan sweep overlay during processing */
+#scan-sweep{
+  position:absolute;left:0;right:0;height:3px;
+  background:linear-gradient(90deg,transparent,var(--amber),transparent);
+  opacity:0;pointer-events:none;
+  box-shadow:0 0 12px var(--amber),0 0 24px var(--amber-glow2);
+}
+#scan-sweep.sweeping{
+  animation:sweep-down 0.8s ease-in-out;
+}
+@keyframes sweep-down{
+  0%{top:0;opacity:0.9}
+  80%{top:100%;opacity:0.6}
+  100%{top:100%;opacity:0}
+}
+
+/* ── Placeholder ──────────────────────────────────────────────────────── */
+#placeholder{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  height:100%;gap:1.5rem;padding:2rem;
+  position:absolute;inset:0;
+}
+.ph-art{
+  font-family:'IBM Plex Mono',monospace;font-size:8px;line-height:1.2;
+  color:rgba(245,166,35,0.09);user-select:none;text-align:left;
+  animation:ph-float 6s ease-in-out infinite;
+}
+@keyframes ph-float{
+  0%,100%{transform:translateY(0)}
+  50%{transform:translateY(-6px)}
+}
+.ph-msg{
+  font-family:'IBM Plex Mono',monospace;font-size:11px;
+  color:var(--text-muted);letter-spacing:0.16em;text-transform:uppercase;
+  display:flex;align-items:center;gap:0.5rem;
+}
+.ph-cursor{
+  display:inline-block;width:8px;height:1.1em;
+  background:var(--amber);opacity:0.5;
+  animation:cur-blink 1s step-end infinite;
+}
+@keyframes cur-blink{0%,100%{opacity:0.5}50%{opacity:0}}
+
+/* ── Matrix rain bg (canvas) ──────────────────────────────────────────── */
+#matrix-bg{
+  position:absolute;inset:0;opacity:0.04;pointer-events:none;z-index:0;
+}
+#ascii-wrap>*:not(#matrix-bg){position:relative;z-index:1}
+
+/* ── Loading overlay ──────────────────────────────────────────────────── */
+#loading{
+  display:none;position:absolute;inset:0;
+  background:rgba(7,7,10,0.85);
+  align-items:center;justify-content:center;flex-direction:column;
+  gap:1rem;z-index:50;
+  backdrop-filter:blur(4px);
+}
+#loading.show{display:flex}
+.ld-ring{
+  width:36px;height:36px;
+  border:2px solid var(--border-mid);
+  border-top-color:var(--amber);
+  border-radius:50%;
+  animation:ring-spin 0.7s linear infinite;
+  box-shadow:0 0 14px var(--amber-glow);
+}
+@keyframes ring-spin{to{transform:rotate(360deg)}}
+.ld-label{
+  font-family:'IBM Plex Mono',monospace;font-size:10px;
+  color:var(--amber);letter-spacing:0.16em;text-transform:uppercase;
+  animation:s-blink 1s ease infinite;
+}
+.ld-bar{
+  width:120px;height:2px;background:var(--border);border-radius:1px;overflow:hidden;
+}
+.ld-bar-fill{
+  height:100%;background:var(--amber);border-radius:1px;width:0;
+  box-shadow:0 0 8px var(--amber);
+  animation:bar-fill 0.7s ease-out forwards;
+}
+@keyframes bar-fill{to{width:85%}}
+
+/* ── Toast ────────────────────────────────────────────────────────────── */
+#toast{
+  position:fixed;bottom:2rem;left:calc(var(--sidebar-w) + (100vw - var(--sidebar-w))/2);
+  transform:translateX(-50%) translateY(8px);
+  background:var(--amber);color:#070709;
+  padding:0.4rem 1.3rem;border-radius:3px;
+  font-family:'IBM Plex Mono',monospace;font-size:10px;font-weight:600;
+  letter-spacing:0.1em;text-transform:uppercase;
+  z-index:9999;opacity:0;transition:all 0.28s ease;pointer-events:none;
+}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* ── Animated grid lines bg for sidebar ──────────────────────────────── */
+.sb-header{
+  background:
+    linear-gradient(rgba(245,166,35,0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(245,166,35,0.03) 1px, transparent 1px),
+    var(--bg-1);
+  background-size:24px 24px;
+}
+</style>
+</head>
+<body>
+
+<!-- Overlays -->
+<div id="crt"></div>
+<div id="vignette"></div>
+<div id="toast"></div>
+<canvas id="canvas"></canvas>
+<input type="file" id="file-input" accept="image/*">
+
+<!-- ─── Sidebar ─────────────────────────────────────── -->
+<aside id="sidebar">
+
+  <!-- Logo -->
+  <div class="sb-header">
+    <div class="logo-eyebrow">// terminal_ascii · v2.0</div>
+    <div class="logo" data-text="ASCII ART GEN">ASCII ART GEN</div>
+    <span class="logo-sub">pixel → character → art</span>
+  </div>
+
+  <!-- Upload -->
+  <div class="sb-section fixed">
+    <div class="section-label">Input Image</div>
+    <div id="drop-zone"
+         onclick="document.getElementById('file-input').click()"
+         ondragover="onDragOver(event)"
+         ondragleave="onDragLeave(event)"
+         ondrop="onDrop(event)">
+      <svg class="up-icon" viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1.3">
+        <rect x="2" y="5" width="24" height="18" rx="2"/>
+        <path d="M14 20V12M14 12l-4 4M14 12l4 4" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M8 5V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v1" opacity="0.4"/>
+      </svg>
+      <div class="up-title">DRAG &amp; DROP IMAGE</div>
+      <div class="up-sub">or click to browse</div>
+      <div class="up-sub">JPG · PNG · GIF · WEBP</div>
+    </div>
+    <div id="preview-wrap">
+      <img id="preview-img" alt="Preview">
+      <div class="preview-bar">
+        <span id="fname">—</span><span id="fdims">—</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scrollable middle section -->
+  <div class="sb-section scrollable">
+
+  <!-- Width & Image -->
+  <div class="sb-subsection">
+    <div class="section-label">Resolution</div>
+    <div class="cg">
+      <div class="cl">Output Width <span class="cv" id="lw">100 cols</span></div>
+      <input type="range" id="r-w" min="40" max="300" value="100" step="5"
+        oninput="rui(this,'lw',v=>v+' cols')">
+    </div>
+    <div class="cg">
+      <div class="cl">Font Size <span class="cv" id="lfs">7px</span></div>
+      <input type="range" id="r-fs" min="4" max="16" value="7" step="1"
+        oninput="rui(this,'lfs',v=>v+'px');setFs(+this.value)">
+    </div>
+  </div>
+
+  <!-- Adjustments -->
+  <div class="sb-subsection">
+    <div class="section-label">Adjustments</div>
+    <div class="cg">
+      <div class="cl">Brightness <span class="cv" id="lb">0</span></div>
+      <input type="range" id="r-b" min="-100" max="100" value="0" step="1"
+        oninput="rui(this,'lb',v=>(v>0?'+':'')+v)">
+    </div>
+    <div class="cg">
+      <div class="cl">Contrast <span class="cv" id="lc">1.0×</span></div>
+      <input type="range" id="r-c" min="50" max="300" value="100" step="5"
+        oninput="rui(this,'lc',v=>(v/100).toFixed(1)+'×')">
+    </div>
+    <div class="cg">
+      <div class="cl">Invert</div>
+      <div class="tr">
+        <button class="tb active" id="inv-n" onclick="setInvert(false)">Normal</button>
+        <button class="tb" id="inv-y" onclick="setInvert(true)">Inverted</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Charset & Theme -->
+  <div class="sb-subsection">
+    <div class="section-label">Style</div>
+    <div class="cg">
+      <div class="cl">Character Set</div>
+      <select id="cset" onchange="onCsetChange()">
+        <option value="standard">Standard — @%#*+=-:. </option>
+        <option value="dense">Dense — $@B%8&amp;WM#*oah</option>
+        <option value="blocks">Blocks — █▓▒░ </option>
+        <option value="minimal">Minimal — #=:. </option>
+        <option value="slant">Slant — /\|!;:,'. </option>
+        <option value="custom">Custom…</option>
+      </select>
+      <input type="text" id="cust-chars" style="display:none;margin-top:0.45rem"
+        placeholder="Characters dark→light" value="@%#*+=-:. ">
+    </div>
+    <div class="cg">
+      <div class="cl">Color Theme</div>
+      <div class="tr">
+        <button class="tb active" id="th-dark"  onclick="setTheme('out-dark')">Amber</button>
+        <button class="tb"         id="th-green" onclick="setTheme('out-green')">Green</button>
+        <button class="tb"         id="th-light" onclick="setTheme('out-light')">Paper</button>
+        <button class="tb"         id="th-white" onclick="setTheme('out-white')">White</button>
+      </div>
+    </div>
+    <div class="cg">
+      <div class="cl" style="margin-bottom:0.4rem">Presets</div>
+      <div class="pc-row">
+        <button class="pc" onclick="preset('photo')">Photo</button>
+        <button class="pc" onclick="preset('dense')">Dense</button>
+        <button class="pc" onclick="preset('sketch')">Sketch</button>
+        <button class="pc" onclick="preset('bold')">Bold</button>
+        <button class="pc" onclick="preset('wide')">Wide</button>
+        <button class="pc" onclick="preset('micro')">Micro</button>
+      </div>
+    </div>
+  </div>
+
+  </div><!-- end scrollable section -->
+
+  <!-- Convert -->
+  <div class="sb-section fixed">
+    <button id="convert-btn" onclick="doConvert()" disabled>▶ &nbsp;Generate ASCII</button>
+  </div>
+
+</aside>
+
+<!-- ─── Main output ────────────────────────────────── -->
+<main id="main">
+  <div id="out-topbar">
+    <div class="out-led idle" id="out-led"></div>
+    <span class="out-title">ASCII Output</span>
+    <span class="out-meta" id="out-meta"></span>
+  </div>
+
+  <div id="out-toolbar">
+    <button class="t-btn" onclick="doCopy()">
+      <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.3">
+        <rect x="4" y="4" width="7" height="7" rx="1"/>
+        <path d="M1 8V2a1 1 0 0 1 1-1h6" stroke-linecap="round"/>
+      </svg>Copy
+    </button>
+    <button class="t-btn" onclick="doTxt()">
+      <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.3">
+        <path d="M6 1v7M3 5l3 3 3-3" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M1 10h10" stroke-linecap="round"/>
+      </svg>.txt
+    </button>
+    <button class="t-btn" onclick="doPng()">
+      <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.3">
+        <rect x="1" y="1" width="10" height="10" rx="1"/>
+        <path d="M1 8l3-3 2 2 2-2 3 3" stroke-linecap="round" stroke-linejoin="round"/>
+        <circle cx="8.5" cy="3.5" r="1"/>
+      </svg>PNG
+    </button>
+    <div class="tsep"></div>
+    <span class="s-pill s-idle" id="status">IDLE</span>
+  </div>
+
+  <div id="ascii-wrap">
+    <canvas id="matrix-bg"></canvas>
+
+    <div id="scan-sweep"></div>
+
+    <div id="loading">
+      <div class="ld-ring"></div>
+      <div class="ld-bar"><div class="ld-bar-fill" id="ld-fill"></div></div>
+      <div class="ld-label">Processing…</div>
+    </div>
+
+    <div id="placeholder">
+      <pre class="ph-art">
+ ██████  ██████  ██████  ███████
+██      ██    ██ ██   ██ ██
+██      ██    ██ ██   ██ █████
+██      ██    ██ ██   ██ ██
+ ██████  ██████  ██████  ███████
+      </pre>
+      <div class="ph-msg">
+        <span>Upload an image to begin</span>
+        <span class="ph-cursor"></span>
+      </div>
+    </div>
+
+    <pre id="ascii-output" class="out-dark" style="display:none;font-size:7px"></pre>
+  </div>
+</main>
+
+<script>
+// ─── State ────────────────────────────────────────────────────────────────
+let imgEl = null, inverted = false, theme = 'out-dark', fs = 7, lastAscii = '';
+const THEMES = ['out-dark','out-green','out-light','out-white'];
+const THEME_BTNS = ['th-dark','th-green','th-light','th-white'];
+
+// ─── 64 Accent Colors ─────────────────────────────────────────────────────────
+const ACCENT_COLORS = [
+  { primary: '#f5a623', dim: '#c47d0e', glow: 'rgba(245,166,35,0.12)', glow2: 'rgba(245,166,35,0.22)', glow3: 'rgba(245,166,35,0.04)', text: '#e8d5a3' },
+  { primary: '#ff6b6b', dim: '#cc3333', glow: 'rgba(255,107,107,0.12)', glow2: 'rgba(255,107,107,0.22)', glow3: 'rgba(255,107,107,0.04)', text: '#ffe0e0' },
+  { primary: '#4ecdc4', dim: '#2a9e8c', glow: 'rgba(78,205,196,0.12)', glow2: 'rgba(78,205,196,0.22)', glow3: 'rgba(78,205,196,0.04)', text: '#d0f5f3' },
+  { primary: '#95e1d3', dim: '#6cb5a6', glow: 'rgba(149,225,211,0.12)', glow2: 'rgba(149,225,211,0.22)', glow3: 'rgba(149,225,211,0.04)', text: '#e0f7f4' },
+  { primary: '#f38181', dim: '#c25d5d', glow: 'rgba(243,129,129,0.12)', glow2: 'rgba(243,129,129,0.22)', glow3: 'rgba(243,129,129,0.04)', text: '#ffe8e8' },
+  { primary: '#aa96da', dim: '#8872b0', glow: 'rgba(170,150,218,0.12)', glow2: 'rgba(170,150,218,0.22)', glow3: 'rgba(170,150,218,0.04)', text: '#f0ebff' },
+  { primary: '#fcbad3', dim: '#ca94a9', glow: 'rgba(252,186,211,0.12)', glow2: 'rgba(252,186,211,0.22)', glow3: 'rgba(252,186,211,0.04)', text: '#ffe8f3' },
+  { primary: '#a8dadc', dim: '#86aeb8', glow: 'rgba(168,218,220,0.12)', glow2: 'rgba(168,218,220,0.22)', glow3: 'rgba(168,218,220,0.04)', text: '#e0f4f6' },
+  { primary: '#457b9d', dim: '#354c6d', glow: 'rgba(69,123,157,0.12)', glow2: 'rgba(69,123,157,0.22)', glow3: 'rgba(69,123,157,0.04)', text: '#d6e5f0' },
+  { primary: '#e63946', dim: '#b82a36', glow: 'rgba(230,57,70,0.12)', glow2: 'rgba(230,57,70,0.22)', glow3: 'rgba(230,57,70,0.04)', text: '#ffe0e0' },
+  { primary: '#f1faee', dim: '#c4c9ba', glow: 'rgba(241,250,238,0.12)', glow2: 'rgba(241,250,238,0.22)', glow3: 'rgba(241,250,238,0.04)', text: '#1a1a0f' },
+  { primary: '#a7c957', dim: '#85a046', glow: 'rgba(167,201,87,0.12)', glow2: 'rgba(167,201,87,0.22)', glow3: 'rgba(167,201,87,0.04)', text: '#e8f4d8' },
+  { primary: '#386641', dim: '#2b4d31', glow: 'rgba(56,102,65,0.12)', glow2: 'rgba(56,102,65,0.22)', glow3: 'rgba(56,102,65,0.04)', text: '#d4e8d8' },
+  { primary: '#6a4c93', dim: '#523d6f', glow: 'rgba(106,76,147,0.12)', glow2: 'rgba(106,76,147,0.22)', glow3: 'rgba(106,76,147,0.04)', text: '#e8e0f5' },
+  { primary: '#1982c4', dim: '#125a94', glow: 'rgba(25,130,196,0.12)', glow2: 'rgba(25,130,196,0.22)', glow3: 'rgba(25,130,196,0.04)', text: '#d9edf8' },
+  { primary: '#ff595e', dim: '#cc464b', glow: 'rgba(255,89,94,0.12)', glow2: 'rgba(255,89,94,0.22)', glow3: 'rgba(255,89,94,0.04)', text: '#ffe0e1' },
+  { primary: '#ffca3a', dim: '#cc9f2e', glow: 'rgba(255,202,58,0.12)', glow2: 'rgba(255,202,58,0.22)', glow3: 'rgba(255,202,58,0.04)', text: '#fff8e0' },
+  { primary: '#8ac926', dim: '#6ba01e', glow: 'rgba(138,201,38,0.12)', glow2: 'rgba(138,201,38,0.22)', glow3: 'rgba(138,201,38,0.04)', text: '#e8f5d0' },
+  { primary: '#6bcf7f', dim: '#54a365', glow: 'rgba(107,207,127,0.12)', glow2: 'rgba(107,207,127,0.22)', glow3: 'rgba(107,207,127,0.04)', text: '#e0f8e8' },
+  { primary: '#4d96ff', dim: '#3d75cc', glow: 'rgba(77,150,255,0.12)', glow2: 'rgba(77,150,255,0.22)', glow3: 'rgba(77,150,255,0.04)', text: '#dce8ff' },
+  { primary: '#ff006e', dim: '#cc0558', glow: 'rgba(255,0,110,0.12)', glow2: 'rgba(255,0,110,0.22)', glow3: 'rgba(255,0,110,0.04)', text: '#ffe0e8' },
+  { primary: '#00d9ff', dim: '#00a8cc', glow: 'rgba(0,217,255,0.12)', glow2: 'rgba(0,217,255,0.22)', glow3: 'rgba(0,217,255,0.04)', text: '#d9f8ff' },
+  { primary: '#3a86ff', dim: '#2d68cc', glow: 'rgba(58,134,255,0.12)', glow2: 'rgba(58,134,255,0.22)', glow3: 'rgba(58,134,255,0.04)', text: '#dcecff' },
+  { primary: '#8338ec', dim: '#6629ba', glow: 'rgba(131,56,236,0.12)', glow2: 'rgba(131,56,236,0.22)', glow3: 'rgba(131,56,236,0.04)', text: '#e8dcff' },
+  { primary: '#ffbe0b', dim: '#cc9609', glow: 'rgba(255,190,11,0.12)', glow2: 'rgba(255,190,11,0.22)', glow3: 'rgba(255,190,11,0.04)', text: '#fffae0' },
+  { primary: '#fb5607', dim: '#c64405', glow: 'rgba(251,86,7,0.12)', glow2: 'rgba(251,86,7,0.22)', glow3: 'rgba(251,86,7,0.04)', text: '#ffe0d0' },
+  { primary: '#06ffa5', dim: '#05cc84', glow: 'rgba(6,255,165,0.12)', glow2: 'rgba(6,255,165,0.22)', glow3: 'rgba(6,255,165,0.04)', text: '#d9ffe8' },
+  { primary: '#6a0572', dim: '#540459', glow: 'rgba(106,5,114,0.12)', glow2: 'rgba(106,5,114,0.22)', glow3: 'rgba(106,5,114,0.04)', text: '#f0d9f8' },
+  { primary: '#05668d', dim: '#044066', glow: 'rgba(5,102,141,0.12)', glow2: 'rgba(5,102,141,0.22)', glow3: 'rgba(5,102,141,0.04)', text: '#d9eef5' },
+  { primary: '#028090', dim: '#026072', glow: 'rgba(2,128,144,0.12)', glow2: 'rgba(2,128,144,0.22)', glow3: 'rgba(2,128,144,0.04)', text: '#d9f0f5' },
+  { primary: '#00a896', dim: '#008076', glow: 'rgba(0,168,150,0.12)', glow2: 'rgba(0,168,150,0.22)', glow3: 'rgba(0,168,150,0.04)', text: '#d9f5f0' },
+  { primary: '#02c39a', dim: '#019f7a', glow: 'rgba(2,195,154,0.12)', glow2: 'rgba(2,195,154,0.22)', glow3: 'rgba(2,195,154,0.04)', text: '#d9faf5' },
+  { primary: '#f4d35e', dim: '#c4a84a', glow: 'rgba(244,211,94,0.12)', glow2: 'rgba(244,211,94,0.22)', glow3: 'rgba(244,211,94,0.04)', text: '#fffae8' },
+  { primary: '#ee964b', dim: '#bb7639', glow: 'rgba(238,150,75,0.12)', glow2: 'rgba(238,150,75,0.22)', glow3: 'rgba(238,150,75,0.04)', text: '#ffe8d9' },
+  { primary: '#f95738', dim: '#c6432a', glow: 'rgba(249,87,56,0.12)', glow2: 'rgba(249,87,56,0.22)', glow3: 'rgba(249,87,56,0.04)', text: '#ffe0d9' },
+  { primary: '#d62828', dim: '#a82020', glow: 'rgba(214,40,40,0.12)', glow2: 'rgba(214,40,40,0.22)', glow3: 'rgba(214,40,40,0.04)', text: '#ffd9d9' },
+  { primary: '#f77f00', dim: '#c66400', glow: 'rgba(247,127,0,0.12)', glow2: 'rgba(247,127,0,0.22)', glow3: 'rgba(247,127,0,0.04)', text: '#ffe8d0' },
+  { primary: '#06a77d', dim: '#058563', glow: 'rgba(6,168,125,0.12)', glow2: 'rgba(6,168,125,0.22)', glow3: 'rgba(6,168,125,0.04)', text: '#d9f5ed' },
+  { primary: '#d5622b', dim: '#a84b21', glow: 'rgba(213,98,43,0.12)', glow2: 'rgba(213,98,43,0.22)', glow3: 'rgba(213,98,43,0.04)', text: '#ffe8d9' },
+  { primary: '#9b59b6', dim: '#7a4690', glow: 'rgba(155,89,182,0.12)', glow2: 'rgba(155,89,182,0.22)', glow3: 'rgba(155,89,182,0.04)', text: '#efdaff' },
+  { primary: '#e74c3c', dim: '#b83a30', glow: 'rgba(231,76,60,0.12)', glow2: 'rgba(231,76,60,0.22)', glow3: 'rgba(231,76,60,0.04)', text: '#ffe0d9' },
+  { primary: '#3498db', dim: '#2a75af', glow: 'rgba(52,152,219,0.12)', glow2: 'rgba(52,152,219,0.22)', glow3: 'rgba(52,152,219,0.04)', text: '#dce8f5' },
+  { primary: '#2ecc71', dim: '#25a354', glow: 'rgba(46,204,113,0.12)', glow2: 'rgba(46,204,113,0.22)', glow3: 'rgba(46,204,113,0.04)', text: '#dffaed' },
+  { primary: '#f39c12', dim: '#c27d0e', glow: 'rgba(243,156,18,0.12)', glow2: 'rgba(243,156,18,0.22)', glow3: 'rgba(243,156,18,0.04)', text: '#ffe8d0' },
+  { primary: '#1abc9c', dim: '#15896e', glow: 'rgba(26,188,156,0.12)', glow2: 'rgba(26,188,156,0.22)', glow3: 'rgba(26,188,156,0.04)', text: '#d9f5f0' },
+  { primary: '#e91e63', dim: '#b91550', glow: 'rgba(233,30,99,0.12)', glow2: 'rgba(233,30,99,0.22)', glow3: 'rgba(233,30,99,0.04)', text: '#ffe0ed' },
+  { primary: '#2196f3', dim: '#1a73c2', glow: 'rgba(33,150,243,0.12)', glow2: 'rgba(33,150,243,0.22)', glow3: 'rgba(33,150,243,0.04)', text: '#dcf0ff' },
+  { primary: '#00bcd4', dim: '#0099a3', glow: 'rgba(0,188,212,0.12)', glow2: 'rgba(0,188,212,0.22)', glow3: 'rgba(0,188,212,0.04)', text: '#d9f8ff' },
+  { primary: '#009688', dim: '#00776b', glow: 'rgba(0,150,136,0.12)', glow2: 'rgba(0,150,136,0.22)', glow3: 'rgba(0,150,136,0.04)', text: '#d9f5f3' },
+  { primary: '#4caf50', dim: '#3d8b40', glow: 'rgba(76,175,80,0.12)', glow2: 'rgba(76,175,80,0.22)', glow3: 'rgba(76,175,80,0.04)', text: '#e0f8e0' },
+  { primary: '#8bc34a', dim: '#6fa039', glow: 'rgba(139,195,74,0.12)', glow2: 'rgba(139,195,74,0.22)', glow3: 'rgba(139,195,74,0.04)', text: '#e8fad9' },
+  { primary: '#cddc39', dim: '#a4af2e', glow: 'rgba(205,220,57,0.12)', glow2: 'rgba(205,220,57,0.22)', glow3: 'rgba(205,220,57,0.04)', text: '#fffae0' },
+  { primary: '#ffc107', dim: '#cc9a06', glow: 'rgba(255,193,7,0.12)', glow2: 'rgba(255,193,7,0.22)', glow3: 'rgba(255,193,7,0.04)', text: '#fff8d9' },
+  { primary: '#ff9800', dim: '#cc7a00', glow: 'rgba(255,152,0,0.12)', glow2: 'rgba(255,152,0,0.22)', glow3: 'rgba(255,152,0,0.04)', text: '#ffe8d0' },
+  { primary: '#ff5722', dim: '#cc4519', glow: 'rgba(255,87,34,0.12)', glow2: 'rgba(255,87,34,0.22)', glow3: 'rgba(255,87,34,0.04)', text: '#ffe0d0' },
+  { primary: '#f44336', dim: '#c33629', glow: 'rgba(244,67,54,0.12)', glow2: 'rgba(244,67,54,0.22)', glow3: 'rgba(244,67,54,0.04)', text: '#ffe0d9' },
+  { primary: '#673ab7', dim: '#512d8a', glow: 'rgba(103,58,183,0.12)', glow2: 'rgba(103,58,183,0.22)', glow3: 'rgba(103,58,183,0.04)', text: '#e8dcff' },
+  { primary: '#3f51b5', dim: '#323e8f', glow: 'rgba(63,81,181,0.12)', glow2: 'rgba(63,81,181,0.22)', glow3: 'rgba(63,81,181,0.04)', text: '#e0e8ff' },
+  { primary: '#ec407a', dim: '#b8306b', glow: 'rgba(236,64,122,0.12)', glow2: 'rgba(236,64,122,0.22)', glow3: 'rgba(236,64,122,0.04)', text: '#ffe0e8' },
+  { primary: '#26a69a', dim: '#1f7f75', glow: 'rgba(38,166,154,0.12)', glow2: 'rgba(38,166,154,0.22)', glow3: 'rgba(38,166,154,0.04)', text: '#d9f5f0' },
+  { primary: '#ab47bc', dim: '#86398c', glow: 'rgba(171,71,188,0.12)', glow2: 'rgba(171,71,188,0.22)', glow3: 'rgba(171,71,188,0.04)', text: '#f0dcff' },
+  { primary: '#7e57c2', dim: '#6445a0', glow: 'rgba(126,87,194,0.12)', glow2: 'rgba(126,87,194,0.22)', glow3: 'rgba(126,87,194,0.04)', text: '#e8dcff' },
+  { primary: '#5c6bc0', dim: '#4751a0', glow: 'rgba(92,107,192,0.12)', glow2: 'rgba(92,107,192,0.22)', glow3: 'rgba(92,107,192,0.04)', text: '#dde8ff' },
+  { primary: '#42a5f5', dim: '#3583c4', glow: 'rgba(66,165,245,0.12)', glow2: 'rgba(66,165,245,0.22)', glow3: 'rgba(66,165,245,0.04)', text: '#dcf0ff' },
+];
+
+function initAccentColor() {
+  const randomColor = ACCENT_COLORS[Math.floor(Math.random() * ACCENT_COLORS.length)];
+  const root = document.documentElement;
+  root.style.setProperty('--amber', randomColor.primary);
+  root.style.setProperty('--amber-dim', randomColor.dim);
+  root.style.setProperty('--amber-glow', randomColor.glow);
+  root.style.setProperty('--amber-glow2', randomColor.glow2);
+  root.style.setProperty('--amber-glow3', randomColor.glow3);
+  root.style.setProperty('--text', randomColor.text);
+  
+  // Also update the matrix rain effect color
+  const matrixElement = document.getElementById('matrix-bg');
+  if(matrixElement) {
+    const ctx = matrixElement.getContext('2d');
+    // The matrix rain will use the new accent color
+  }
+}
+
+const CHARSETS = {
+  standard:'@%#*+=-:. ',
+  dense:'$@B%8&WM#*oahkbdpqwmZO0QLCJUYXzcvunxrjft/|()1{}[]?-_+~<>i!lI;:,"^`. ',
+  blocks:'\u2588\u2593\u2592\u2591 ',
+  minimal:'#=:. ',
+  slant:'/\\|!;:,\'. '
+};
+const PRESETS = {
+  photo: {w:120,b:0,c:100,cs:'standard',inv:false},
+  dense: {w:180,b:-10,c:140,cs:'dense',inv:false},
+  sketch:{w:100,b:10,c:160,cs:'minimal',inv:false},
+  bold:  {w:80,b:-20,c:200,cs:'blocks',inv:false},
+  wide:  {w:240,b:0,c:110,cs:'standard',inv:false},
+  micro: {w:50,b:0,c:120,cs:'dense',inv:false}
+};
+
+// ─── Range UI ────────────────────────────────────────────────────────────
+function rui(el, lid, fmt) {
+  document.getElementById(lid).textContent = fmt(el.value);
+  const pct = ((+el.value - +el.min) / (+el.max - +el.min) * 100).toFixed(1) + '%';
+  el.style.setProperty('--pct', pct);
+}
+['r-w','r-b','r-c','r-fs'].forEach(id => {
+  const el = document.getElementById(id);
+  el.dispatchEvent(new Event('input'));
+});
+
+// ─── Controls ────────────────────────────────────────────────────────────
+function onCsetChange() {
+  document.getElementById('cust-chars').style.display =
+    document.getElementById('cset').value === 'custom' ? 'block' : 'none';
+}
+function getCharset() {
+  const v = document.getElementById('cset').value;
+  return v === 'custom' ? (document.getElementById('cust-chars').value || '@%#*+=-:. ') : (CHARSETS[v] || CHARSETS.standard);
+}
+function setInvert(v) {
+  inverted = v;
+  document.getElementById('inv-n').classList.toggle('active', !v);
+  document.getElementById('inv-y').classList.toggle('active', v);
+}
+function setTheme(t) {
+  theme = t;
+  const out = document.getElementById('ascii-output');
+  THEMES.forEach(c => out.classList.remove(c));
+  out.classList.add(t);
+  THEME_BTNS.forEach((id,i) => document.getElementById(id).classList.toggle('active', THEMES[i]===t));
+}
+function setFs(sz) {
+  fs = sz;
+  document.getElementById('ascii-output').style.fontSize = sz + 'px';
+}
+function preset(name) {
+  const p = PRESETS[name]; if (!p) return;
+  const rw=document.getElementById('r-w'), rb=document.getElementById('r-b'), rc=document.getElementById('r-c');
+  rw.value=p.w; rui(rw,'lw',v=>v+' cols');
+  rb.value=p.b; rui(rb,'lb',v=>(v>0?'+':'')+v);
+  rc.value=p.c; rui(rc,'lc',v=>(v/100).toFixed(1)+'×');
+  document.getElementById('cset').value=p.cs;
+  document.getElementById('cust-chars').style.display='none';
+  setInvert(p.inv);
+  if (imgEl) doConvert();
+}
+
+// ─── File load ────────────────────────────────────────────────────────────
+document.getElementById('file-input').addEventListener('change', e => {
+  if (e.target.files[0]) loadFile(e.target.files[0]);
+});
+function onDragOver(e) { e.preventDefault(); document.getElementById('drop-zone').classList.add('drag-over'); }
+function onDragLeave() { document.getElementById('drop-zone').classList.remove('drag-over'); }
+function onDrop(e) {
+  e.preventDefault();
+  document.getElementById('drop-zone').classList.remove('drag-over');
+  const f = e.dataTransfer.files[0];
+  if (f && f.type.startsWith('image/')) loadFile(f);
+  else toast('Please drop an image file');
+}
+function loadFile(file) {
+  const reader = new FileReader();
+  reader.onload = ev => {
+    const img = new Image();
+    img.onload = () => {
+      imgEl = img;
+      document.getElementById('preview-img').src = ev.target.result;
+      const n = file.name;
+      document.getElementById('fname').textContent = n.length>24 ? n.slice(0,22)+'\u2026' : n;
+      document.getElementById('fdims').textContent = img.width+'×'+img.height+'px';
+      document.getElementById('preview-wrap').style.display = 'block';
+      document.getElementById('convert-btn').disabled = false;
+      setLed('amber');
+      doConvert();
+    };
+    img.src = ev.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+// ─── LED ──────────────────────────────────────────────────────────────────
+function setLed(state) {
+  const led = document.getElementById('out-led');
+  led.className = 'out-led ' + state;
+}
+
+// ─── Status pill ──────────────────────────────────────────────────────────
+function setStatus(s) {
+  const el = document.getElementById('status');
+  el.className = 's-pill';
+  if (s==='ok'){el.classList.add('s-ok');el.textContent='READY';}
+  else if(s==='busy'){el.classList.add('s-busy');el.textContent='PROCESSING';}
+  else{el.classList.add('s-idle');el.textContent='IDLE';}
+}
+
+// ─── Convert ──────────────────────────────────────────────────────────────
+function doConvert() {
+  if (!imgEl) return;
+  setStatus('busy'); setLed('amber');
+  const loading = document.getElementById('loading');
+  const fill = document.getElementById('ld-fill');
+  const logo = document.querySelector('.logo');
+  
+  loading.classList.add('show');
+  document.getElementById('ascii-output').style.display = 'none';
+  document.getElementById('placeholder').style.display = 'none';
+  
+  // Add glow effect to logo
+  if(logo) {
+    logo.classList.remove('generating');
+    logo.getBoundingClientRect();
+    logo.classList.add('generating');
+  }
+
+  // Reset bar animation
+  fill.style.animation = 'none';
+  fill.getBoundingClientRect();
+  fill.style.animation = '';
+
+  setTimeout(() => {
+    try {
+      const ascii = buildAscii();
+      lastAscii = ascii;
+      const out = document.getElementById('ascii-output');
+      out.textContent = ascii;
+      out.style.display = 'block';
+      out.style.fontSize = fs + 'px';
+      THEMES.forEach(c=>out.classList.remove(c));
+      out.classList.add(theme);
+      // Trigger reveal animation
+      out.classList.remove('reveal');
+      out.getBoundingClientRect();
+      out.classList.add('reveal');
+      const cols = +document.getElementById('r-w').value;
+      const rows = ascii.split('\n').length;
+      document.getElementById('out-meta').textContent = cols+'×'+rows+' chars';
+      setStatus('ok'); setLed('green');
+      // Scan sweep
+      triggerSweep();
+      
+      // Remove glow effect after generation
+      if(logo) {
+        setTimeout(() => logo.classList.remove('generating'), 600);
+      }
+    } catch(e) {
+      setStatus('idle'); setLed('idle');
+      console.error(e);
+      if(logo) logo.classList.remove('generating');
+    }
+    loading.classList.remove('show');
+  }, 30);
+}
+
+function triggerSweep() {
+  const s = document.getElementById('scan-sweep');
+  s.classList.remove('sweeping');
+  s.getBoundingClientRect();
+  s.classList.add('sweeping');
+  s.addEventListener('animationend', () => s.classList.remove('sweeping'), {once:true});
+}
+
+// ─── Build ASCII ──────────────────────────────────────────────────────────
+function buildAscii() {
+  const cv = document.getElementById('canvas');
+  const ctx = cv.getContext('2d');
+  const cols = +document.getElementById('r-w').value;
+  const rows = Math.round((imgEl.height / imgEl.width) * cols * 0.46);
+  cv.width = cols; cv.height = rows;
+  ctx.drawImage(imgEl, 0, 0, cols, rows);
+  const data = ctx.getImageData(0,0,cols,rows).data;
+  const brightness = +document.getElementById('r-b').value;
+  const contrast = +document.getElementById('r-c').value / 100;
+  const chars = getCharset();
+  const lines = [];
+  for (let y=0;y<rows;y++) {
+    let row='';
+    for (let x=0;x<cols;x++) {
+      const i=(y*cols+x)*4;
+      let g = 0.299*data[i] + 0.587*data[i+1] + 0.114*data[i+2];
+      g = (g + brightness - 128) * contrast + 128;
+      g = Math.max(0, Math.min(255, g));
+      let t = g/255;
+      if (inverted) t=1-t;
+      row += chars[Math.min(chars.length-1, Math.floor(t*(chars.length-1)))];
+    }
+    lines.push(row);
+  }
+  return lines.join('\n');
+}
+
+// ─── Live update ──────────────────────────────────────────────────────────
+let dbTimer;
+['r-w','r-b','r-c'].forEach(id => {
+  document.getElementById(id).addEventListener('input', () => {
+    if (!imgEl) return;
+    clearTimeout(dbTimer);
+    dbTimer = setTimeout(doConvert, 220);
+  });
+});
+
+// ─── Export ───────────────────────────────────────────────────────────────
+function doCopy() {
+  if (!lastAscii) { toast('Generate ASCII first'); return; }
+  navigator.clipboard.writeText(lastAscii)
+    .then(() => toast('Copied to clipboard!'))
+    .catch(() => {
+      const ta=document.createElement('textarea');
+      ta.value=lastAscii;document.body.appendChild(ta);ta.select();
+      document.execCommand('copy');document.body.removeChild(ta);
+      toast('Copied!');
+    });
+}
+function doTxt() {
+  if (!lastAscii) { toast('Generate ASCII first'); return; }
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([lastAscii],{type:'text/plain'}));
+  a.download='ascii-art.txt'; a.click();
+  toast('Downloading .txt…');
+}
+function doPng() {
+  if (!lastAscii) { toast('Generate ASCII first'); return; }
+  const lines=lastAscii.split('\n');
+  const fsPx=fs+2, lh=Math.ceil(fsPx*1.18), cw=fsPx*0.6;
+  const pw=Math.ceil(lines[0].length*cw)+32, ph=lines.length*lh+32;
+  const c=document.createElement('canvas');
+  c.width=pw; c.height=ph;
+  const cx=c.getContext('2d');
+  const bgs={'out-dark':'#000','out-green':'#001500','out-light':'#f5f0e4','out-white':'#0d0d0d'};
+  const fgs={'out-dark':'#f5a623','out-green':'#33ff66','out-light':'#1a1a0f','out-white':'#fff'};
+  cx.fillStyle=bgs[theme]||'#000'; cx.fillRect(0,0,pw,ph);
+  cx.fillStyle=fgs[theme]||'#f5a623';
+  cx.font=fsPx+'px "IBM Plex Mono",monospace'; cx.textBaseline='top';
+  lines.forEach((l,i)=>cx.fillText(l,16,16+i*lh));
+  const a=document.createElement('a');
+  a.href=c.toDataURL('image/png'); a.download='ascii-art.png'; a.click();
+  toast('Downloading PNG…');
+}
+
+// ─── Toast ────────────────────────────────────────────────────────────────
+let toastT;
+function toast(msg) {
+  const el=document.getElementById('toast');
+  el.textContent=msg; el.classList.add('show');
+  clearTimeout(toastT);
+  toastT=setTimeout(()=>el.classList.remove('show'),2200);
+}
+
+// ─── Matrix rain bg ───────────────────────────────────────────────────────
+(function initMatrix() {
+  const c = document.getElementById('matrix-bg');
+  const wrap = document.getElementById('ascii-wrap');
+  function resize() { c.width=wrap.clientWidth; c.height=wrap.clientHeight; }
+  resize();
+  new ResizeObserver(resize).observe(wrap);
+  const ctx = c.getContext('2d');
+  const chars = '01アイウエオカキクケコサシスセソタチツテトナニヌネノ@#%&';
+  let cols, drops;
+  function init() {
+    cols = Math.floor(c.width / 14);
+    drops = Array(cols).fill(0).map(()=>Math.random()*c.height/14|0);
+  }
+  init();
+  new ResizeObserver(init).observe(wrap);
+  setInterval(()=>{
+    ctx.fillStyle='rgba(0,0,0,0.06)';
+    ctx.fillRect(0,0,c.width,c.height);
+    ctx.fillStyle='rgba(245,166,35,0.7)';
+    ctx.font='12px "IBM Plex Mono",monospace';
+    drops.forEach((y,i)=>{
+      ctx.fillText(chars[Math.random()*chars.length|0], i*14, y*14);
+      if (y*14>c.height && Math.random()>0.975) drops[i]=0;
+      drops[i]++;
+    });
+  },80);
+})();
+
+// ─── Init range UI ────────────────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded',()=>{
+  initAccentColor();
+  rui(document.getElementById('r-w'),'lw',v=>v+' cols');
+  rui(document.getElementById('r-b'),'lb',v=>(v>0?'+':'')+v);
+  rui(document.getElementById('r-c'),'lc',v=>(v/100).toFixed(1)+'×');
+  rui(document.getElementById('r-fs'),'lfs',v=>v+'px');
+});
+</script>
+</body>
+</html>
