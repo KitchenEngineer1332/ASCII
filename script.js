@@ -780,3 +780,4 @@
       rui(document.getElementById('r-ls'),   'lls',    v=>(v/100).toFixed(2)+'em');
       rui(document.getElementById('r-speed'),'l-speed',v=>['Slowest','Slow','Medium','Fast','Turbo'][v-1]);
     });
+
