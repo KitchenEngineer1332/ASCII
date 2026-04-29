@@ -118,6 +118,3 @@ This project is provided as-is for personal and commercial use.
 
 Built with HTML5, CSS3, and vanilla JavaScript. Uses IBM Plex Mono and Space Grotesk fonts from Google Fonts.
 
-## Support
-
-For issues or feature requests, review the browser console for error messages and ensure your image format is supported.
