@@ -1,0 +1,1575 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ASCII Art Generator</title>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,300;0,400;0,500;0,600;1,400&family=Space+Grotesk:wght@300;400;500&display=swap" rel="stylesheet">
+  <style>
+    /* ── Variables ─────────────────────────────────────────────────────── */
+    :root {
+      --amber:       #f5a623;
+      --amber-dim:   #c47d0e;
+      --amber-glow:  rgba(245,166,35,0.12);
+      --amber-glow2: rgba(245,166,35,0.22);
+      --amber-glow3: rgba(245,166,35,0.04);
+      --bg-0: #07070a;
+      --bg-1: #0d0d0f;
+      --bg-2: #131310;
+      --bg-3: #1a1a16;
+      --bg-4: #22221d;
+      --border:     rgba(245,166,35,0.16);
+      --border-mid: rgba(245,166,35,0.28);
+      --border-hi:  rgba(245,166,35,0.5);
+      --text:       #e8d5a3;
+      --text-dim:   rgba(232,213,163,0.5);
+      --text-muted: rgba(232,213,163,0.25);
+      --green: #4ade80;
+      --sidebar-w: 330px;
+    }
+
+    /* ── Reset ─────────────────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing:border-box; margin:0; padding:0 }
+    html, body { height:100%; overflow:hidden }
+    body { font-family:'Space Grotesk',sans-serif; background:var(--bg-0); color:var(--text) }
+    canvas, input[type=file] { display:none }
+
+    /* ── CRT overlay ───────────────────────────────────────────────────── */
+    #crt {
+      position:fixed; inset:0; pointer-events:none; z-index:9000;
+      background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.06) 2px,rgba(0,0,0,0.06) 4px);
+      animation:crt-flicker 8s ease-in-out infinite;
+    }
+    @keyframes crt-flicker {
+      0%,100%{opacity:1} 92%{opacity:1} 93%{opacity:.92} 94%{opacity:1} 96%{opacity:.95} 97%{opacity:1}
+    }
+    #vignette {
+      position:fixed; inset:0; pointer-events:none; z-index:8999;
+      background:radial-gradient(ellipse at center, transparent 50%, rgba(0,0,0,0.75) 100%);
+    }
+
+    /* ── Split layout ──────────────────────────────────────────────────── */
+    #sidebar {
+      position:fixed; left:0; top:0; bottom:0; width:var(--sidebar-w);
+      background:var(--bg-1); border-right:1px solid var(--border);
+      overflow-y:auto; overflow-x:hidden;
+      display:flex; flex-direction:column; z-index:10;
+      opacity:0; transform:translateX(-100%);
+      animation:slide-in-left 0.6s cubic-bezier(0.16,1,0.3,1) both;
+    }
+    #sidebar::-webkit-scrollbar { width:4px }
+    #sidebar::-webkit-scrollbar-track { background:transparent }
+    #sidebar::-webkit-scrollbar-thumb { background:var(--border-mid); border-radius:2px }
+    #sidebar::-webkit-scrollbar-thumb:hover { background:var(--amber-dim) }
+
+    @keyframes slide-in-left {
+      from { transform:translateX(-100%); opacity:0 }
+      to   { transform:translateX(0);    opacity:1 }
+    }
+
+    #main {
+      position:fixed; left:var(--sidebar-w); right:0; top:0; bottom:0;
+      display:flex; flex-direction:column; background:var(--bg-0);
+      opacity:0; transform:translateX(60px);
+      animation:slide-in-right 0.6s cubic-bezier(0.16,1,0.3,1) 0.1s both;
+    }
+    @keyframes slide-in-right {
+      from { transform:translateX(60px); opacity:0 }
+      to   { transform:translateX(0);   opacity:1 }
+    }
+
+    @media(max-width:800px) {
+      #sidebar { position:relative; width:100%; height:auto; border-right:none; border-bottom:1px solid var(--border); overflow:visible }
+      #main    { position:relative; left:0; height:70vh }
+      html, body { overflow:auto; height:auto }
+    }
+
+    /* ── Sidebar header ────────────────────────────────────────────────── */
+    .sb-header {
+      padding:1.4rem 1.2rem 1rem; border-bottom:1px solid var(--border);
+      position:relative; overflow:hidden; flex-shrink:0;
+      background:
+        linear-gradient(rgba(245,166,35,0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(245,166,35,0.03) 1px, transparent 1px),
+        var(--bg-1);
+      background-size:24px 24px;
+    }
+    .sb-header::after {
+      content:''; position:absolute; bottom:0; left:0; right:0; height:1px;
+      background:linear-gradient(90deg,transparent,var(--border-hi),transparent);
+    }
+    .logo-eyebrow {
+      font-family:'IBM Plex Mono',monospace; font-size:9px; letter-spacing:0.2em;
+      color:var(--amber); opacity:0.55; text-transform:uppercase; margin-bottom:0.6rem;
+    }
+    .logo {
+      font-family:'IBM Plex Mono',monospace; font-size:1.55rem; font-weight:600;
+      color:var(--amber); letter-spacing:-0.02em; line-height:1;
+      text-shadow:0 0 20px var(--amber-glow2), 0 0 50px var(--amber-glow);
+      position:relative; display:inline-block;
+      animation:glow-breathe 4s ease-in-out infinite; transition:all 0.3s ease;
+    }
+    @keyframes glow-breathe {
+      0%,100% { text-shadow:0 0 20px var(--amber-glow2), 0 0 50px var(--amber-glow) }
+      50%      { text-shadow:0 0 30px var(--amber), 0 0 70px var(--amber-glow2), 0 0 120px var(--amber-glow) }
+    }
+    @keyframes logo-generating {
+      0%   { text-shadow:0 0 10px currentColor, 0 0 20px currentColor, 0 0 40px currentColor }
+      50%  { text-shadow:0 0 20px currentColor, 0 0 40px currentColor, 0 0 80px currentColor, 0 0 120px currentColor }
+      100% { text-shadow:0 0 10px currentColor, 0 0 20px currentColor, 0 0 40px currentColor }
+    }
+    .logo.generating { animation:glow-breathe 4s ease-in-out infinite, logo-generating 0.6s ease-in-out; filter:brightness(1.4) }
+
+    /* Glitch */
+    .logo::before, .logo::after {
+      content:attr(data-text); position:absolute; inset:0;
+      font-family:'IBM Plex Mono',monospace; font-size:inherit; font-weight:inherit; opacity:0;
+    }
+    .logo::before { color:#ff4444; animation:glitch-red  6s infinite }
+    .logo::after  { color:#44ffff; animation:glitch-cyan 6s infinite 0.05s }
+    @keyframes glitch-red {
+      0%,89%,100%{opacity:0;transform:none;clip-path:none}
+      90%{opacity:0.5;transform:translate(-2px,0);clip-path:polygon(0 20%,100% 20%,100% 40%,0 40%)}
+      91%{opacity:0;transform:none}
+      93%{opacity:0.4;transform:translate(2px,1px);clip-path:polygon(0 60%,100% 60%,100% 80%,0 80%)}
+      94%{opacity:0}
+    }
+    @keyframes glitch-cyan {
+      0%,89%,100%{opacity:0;transform:none;clip-path:none}
+      90%{opacity:0.4;transform:translate(2px,-1px);clip-path:polygon(0 30%,100% 30%,100% 50%,0 50%)}
+      91%{opacity:0}
+      93%{opacity:0.35;transform:translate(-1px,0);clip-path:polygon(0 65%,100% 65%,100% 85%,0 85%)}
+      94%{opacity:0}
+    }
+    .logo-sub { font-family:'IBM Plex Mono',monospace; font-size:10px; color:var(--text-muted); letter-spacing:0.1em; margin-top:0.35rem; display:block }
+
+    /* ── Sidebar sections ──────────────────────────────────────────────── */
+    .sb-section { padding:1rem 1.2rem; border-bottom:1px solid var(--border); flex-shrink:0 }
+    .sb-section.scrollable { flex:1; overflow-y:auto; overflow-x:hidden; padding:0; border-bottom:1px solid var(--border) }
+    .sb-section.scrollable::-webkit-scrollbar { width:4px }
+    .sb-section.scrollable::-webkit-scrollbar-track { background:transparent }
+    .sb-section.scrollable::-webkit-scrollbar-thumb { background:var(--border-mid); border-radius:2px }
+    .sb-section.scrollable::-webkit-scrollbar-thumb:hover { background:var(--amber-dim) }
+    .sb-subsection { padding:1rem 1.2rem; border-bottom:1px solid var(--border) }
+    .sb-subsection:last-child { border-bottom:none }
+    .sb-section.fixed { flex-shrink:0 }
+    .sb-section:last-child { border-bottom:none }
+
+    .section-label {
+      font-family:'IBM Plex Mono',monospace; font-size:9px; letter-spacing:0.18em;
+      color:var(--amber); opacity:0.6; text-transform:uppercase; margin-bottom:0.85rem;
+      display:flex; align-items:center; gap:0.5rem;
+    }
+    .section-label::after { content:''; flex:1; height:1px; background:linear-gradient(90deg,var(--border),transparent) }
+
+    /* Staggered entrance */
+    .sb-section { animation:fade-up 0.5s ease both }
+    .sb-section:nth-child(1){animation-delay:0.15s} .sb-section:nth-child(2){animation-delay:0.25s}
+    .sb-section:nth-child(3){animation-delay:0.35s} .sb-section:nth-child(4){animation-delay:0.45s}
+    .sb-section:nth-child(5){animation-delay:0.5s}  .sb-section:nth-child(6){animation-delay:0.55s}
+    @keyframes fade-up { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
+
+    /* ── Drop zone ─────────────────────────────────────────────────────── */
+    #drop-zone {
+      border:1px dashed var(--border-mid); border-radius:3px; padding:1.8rem 1rem;
+      text-align:center; cursor:pointer;
+      transition:border-color 0.25s, background 0.25s, transform 0.2s;
+      background:var(--bg-2); user-select:none; position:relative; overflow:hidden;
+    }
+    #drop-zone::before {
+      content:''; position:absolute; inset:0;
+      background:linear-gradient(135deg,var(--amber-glow3) 0%,transparent 60%);
+      opacity:0; transition:opacity 0.3s;
+    }
+    #drop-zone:hover::before { opacity:1 }
+    #drop-zone:hover { border-color:var(--amber) }
+    #drop-zone.drag-over { border-color:var(--amber); background:var(--amber-glow2); transform:scale(1.02) }
+    .up-icon { width:28px; height:28px; color:var(--amber); margin:0 auto 0.7rem; opacity:0.45; transition:opacity 0.2s, transform 0.2s }
+    #drop-zone:hover .up-icon { opacity:0.75; transform:translateY(-2px) }
+    .up-title { font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--text); margin-bottom:0.3rem; letter-spacing:0.04em }
+    .up-sub   { font-family:'IBM Plex Mono',monospace; font-size:9px; color:var(--text-muted); line-height:1.8 }
+
+    /* ── Preview ───────────────────────────────────────────────────────── */
+    #preview-wrap {
+      display:none; border:1px solid var(--border); border-radius:3px; overflow:hidden;
+      animation:fade-in 0.4s ease; cursor:pointer; transition:border-color 0.25s, transform 0.2s;
+    }
+    #preview-wrap:hover { border-color:var(--amber) }
+    #preview-wrap.drag-over { border-color:var(--amber); transform:scale(1.02) }
+    @keyframes fade-in { from{opacity:0;transform:translateY(4px)} to{opacity:1;transform:translateY(0)} }
+    #preview-img { width:100%; display:block; max-height:160px; object-fit:contain; background:#000 }
+    .preview-bar {
+      padding:4px 8px; background:var(--bg-3); border-top:1px solid var(--border);
+      font-family:'IBM Plex Mono',monospace; font-size:9px; color:var(--amber);
+      letter-spacing:0.05em; display:flex; justify-content:space-between;
+    }
+
+    /* ── Controls ──────────────────────────────────────────────────────── */
+    .cg { margin-bottom:1rem }
+    .cg:last-child { margin-bottom:0 }
+    .cl {
+      display:flex; justify-content:space-between; align-items:center;
+      font-family:'IBM Plex Mono',monospace; font-size:9px; letter-spacing:0.1em;
+      color:var(--text-dim); text-transform:uppercase; margin-bottom:0.4rem;
+    }
+    .cv { color:var(--amber); font-weight:500; font-size:10px }
+
+    input[type=range] {
+      width:100%; -webkit-appearance:none; height:2px; border-radius:1px; outline:none; cursor:pointer;
+      background:linear-gradient(90deg, var(--amber) var(--pct,50%), var(--border-mid) var(--pct,50%));
+      transition:box-shadow 0.15s;
+    }
+    input[type=range]:focus { box-shadow:0 0 0 2px var(--amber-glow) }
+    input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance:none; width:12px; height:12px; border-radius:50%;
+      background:var(--amber); cursor:pointer; box-shadow:0 0 7px var(--amber-glow2);
+      transition:transform 0.12s, box-shadow 0.12s;
+    }
+    input[type=range]:hover::-webkit-slider-thumb { transform:scale(1.3); box-shadow:0 0 14px var(--amber) }
+    input[type=range]:active::-webkit-slider-thumb { transform:scale(1.15) }
+
+    select, input[type=text] {
+      width:100%; padding:6px 8px; background:var(--bg-3); border:1px solid var(--border);
+      border-radius:3px; color:var(--text); font-family:'IBM Plex Mono',monospace; font-size:10px;
+      outline:none; transition:border-color 0.2s, box-shadow 0.2s; -webkit-appearance:none;
+    }
+    select {
+      background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23f5a623'/%3E%3C/svg%3E");
+      background-repeat:no-repeat; background-position:right 9px center; padding-right:26px;
+    }
+    select:focus, input[type=text]:focus { border-color:var(--amber); box-shadow:0 0 0 2px var(--amber-glow) }
+    select option { background:var(--bg-3); color:var(--text) }
+
+    .tr { display:flex; gap:0.35rem }
+    .tb {
+      flex:1; padding:5px 4px; border:1px solid var(--border); border-radius:3px;
+      background:var(--bg-3); color:var(--text-dim); cursor:pointer;
+      font-family:'IBM Plex Mono',monospace; font-size:9px; text-align:center;
+      transition:all 0.15s; letter-spacing:0.04em; text-transform:uppercase;
+    }
+    .tb.active { border-color:var(--amber); color:var(--amber); background:var(--amber-glow) }
+    .tb:hover:not(.active) { border-color:var(--border-mid); color:var(--text) }
+
+    .pc-row { display:flex; flex-wrap:wrap; gap:0.3rem }
+    .pc {
+      padding:3px 8px; border:1px solid var(--border); border-radius:2px;
+      background:transparent; color:var(--text-muted); cursor:pointer;
+      font-family:'IBM Plex Mono',monospace; font-size:9px; transition:all 0.15s; letter-spacing:0.03em;
+    }
+    .pc:hover { border-color:var(--amber); color:var(--amber); background:var(--amber-glow) }
+
+    /* ── Convert button ────────────────────────────────────────────────── */
+    #convert-btn {
+      width:100%; padding:0.65rem;
+      background:linear-gradient(135deg, var(--amber) 0%, var(--amber-dim) 100%);
+      color:#080808; border:none; border-radius:3px;
+      font-family:'IBM Plex Mono',monospace; font-size:11px; font-weight:600;
+      letter-spacing:0.14em; text-transform:uppercase; cursor:pointer;
+      transition:all 0.2s; position:relative; overflow:hidden;
+    }
+    #convert-btn::before {
+      content:''; position:absolute; inset:0;
+      background:linear-gradient(180deg,rgba(255,255,255,0.14) 0%,transparent 100%); pointer-events:none;
+    }
+    #convert-btn::after {
+      content:''; position:absolute; top:0; left:-100%; width:60%; height:100%;
+      background:linear-gradient(90deg,transparent,rgba(255,255,255,0.25),transparent);
+      transition:left 0.4s ease; pointer-events:none;
+    }
+    #convert-btn:hover::after { left:160% }
+    #convert-btn:hover { box-shadow:0 0 28px var(--amber-glow2), 0 6px 20px rgba(0,0,0,0.5); transform:translateY(-2px) }
+    #convert-btn:active { transform:translateY(0); box-shadow:none }
+    #convert-btn:disabled { opacity:0.35; cursor:not-allowed; transform:none; box-shadow:none }
+    #convert-btn:disabled::after { display:none }
+    /* Pulsing ring while generating */
+    #convert-btn.running {
+      animation:btn-pulse 0.8s ease-in-out infinite;
+      box-shadow:0 0 0 0 var(--amber-glow2);
+    }
+    @keyframes btn-pulse {
+      0%  { box-shadow:0 0 0 0 var(--amber-glow2) }
+      70% { box-shadow:0 0 0 8px rgba(245,166,35,0) }
+      100%{ box-shadow:0 0 0 0 rgba(245,166,35,0) }
+    }
+
+    /* ── Stats bar ─────────────────────────────────────────────────────── */
+    #stats-bar {
+      display:flex; gap:0.75rem; flex-wrap:wrap; margin-top:0.7rem;
+    }
+    .stat {
+      font-family:'IBM Plex Mono',monospace; font-size:9px; color:var(--text-muted);
+      letter-spacing:0.06em; display:flex; align-items:center; gap:0.3rem;
+    }
+    .stat-val { color:var(--amber); font-weight:500 }
+
+    /* ── Main / Output ─────────────────────────────────────────────────── */
+    #out-topbar {
+      padding:0.5rem 1rem; border-bottom:1px solid var(--border);
+      background:var(--bg-1); display:flex; align-items:center; gap:0.5rem;
+      flex-shrink:0; position:relative;
+    }
+    #out-topbar::after {
+      content:''; position:absolute; bottom:0; left:0; right:0; height:1px;
+      background:linear-gradient(90deg,transparent,var(--border-hi),transparent);
+      animation:border-scan 4s ease-in-out infinite;
+    }
+    @keyframes border-scan { 0%,100%{opacity:0.4} 50%{opacity:1} }
+
+    .out-led { width:7px; height:7px; border-radius:50% }
+    .out-led.idle  { background:var(--text-muted) }
+    .out-led.amber { background:var(--amber); box-shadow:0 0 7px var(--amber), 0 0 14px var(--amber-glow2); animation:led-amber 2.5s ease-in-out infinite }
+    .out-led.green { background:var(--green);  box-shadow:0 0 7px var(--green),  0 0 14px rgba(74,222,128,0.4); animation:led-green 1.8s ease-in-out infinite }
+    @keyframes led-amber { 0%,100%{opacity:1} 50%{opacity:0.35} }
+    @keyframes led-green { 0%,100%{box-shadow:0 0 7px var(--green), 0 0 14px rgba(74,222,128,0.4)} 50%{box-shadow:0 0 12px var(--green), 0 0 24px rgba(74,222,128,0.6)} }
+
+    .out-title { font-family:'IBM Plex Mono',monospace; font-size:10px; letter-spacing:0.14em; color:var(--amber); text-transform:uppercase; opacity:0.75 }
+    .out-meta  { font-family:'IBM Plex Mono',monospace; font-size:9px; color:var(--text-muted); margin-left:auto; letter-spacing:0.05em }
+
+    /* Zoom controls in topbar */
+    .zoom-group { display:flex; align-items:center; gap:0.25rem }
+    .zoom-btn {
+      padding:2px 7px; border:1px solid var(--border); border-radius:2px;
+      background:transparent; color:var(--text-dim); font-family:'IBM Plex Mono',monospace;
+      font-size:11px; cursor:pointer; transition:all 0.15s; line-height:1;
+    }
+    .zoom-btn:hover { border-color:var(--amber); color:var(--amber) }
+    .zoom-label { font-family:'IBM Plex Mono',monospace; font-size:9px; color:var(--text-muted); min-width:32px; text-align:center }
+
+    /* Toolbar */
+    #out-toolbar {
+      padding:0.45rem 0.9rem; border-bottom:1px solid var(--border);
+      display:flex; align-items:center; gap:0.35rem;
+      background:var(--bg-2); flex-shrink:0; flex-wrap:wrap;
+    }
+    .t-btn {
+      display:flex; align-items:center; gap:4px; padding:4px 10px;
+      border:1px solid var(--border); border-radius:3px;
+      background:transparent; color:var(--text-dim);
+      font-family:'IBM Plex Mono',monospace; font-size:9px; letter-spacing:0.05em;
+      cursor:pointer; transition:all 0.15s; text-transform:uppercase; white-space:nowrap;
+      position:relative; overflow:hidden;
+    }
+    .t-btn::after { content:''; position:absolute; inset:0; background:var(--amber-glow); opacity:0; transition:opacity 0.15s }
+    .t-btn:hover { border-color:var(--amber); color:var(--amber) }
+    .t-btn:hover::after { opacity:1 }
+    .t-btn:active { background:var(--amber-glow2) }
+    .t-btn svg { width:11px; height:11px; flex-shrink:0 }
+    .tsep { flex:1 }
+
+    .s-pill { padding:2px 8px; border-radius:2px; font-family:'IBM Plex Mono',monospace; font-size:8px; letter-spacing:0.08em; text-transform:uppercase; border:1px solid }
+    .s-idle { color:var(--text-muted); border-color:var(--border) }
+    .s-ok   { color:var(--green);      border-color:rgba(74,222,128,0.3); background:rgba(74,222,128,0.07) }
+    .s-busy { color:var(--amber);      border-color:var(--border); background:var(--amber-glow); animation:s-blink 0.8s step-end infinite }
+    @keyframes s-blink { 50%{opacity:0.3} }
+
+    /* ── ASCII output area ─────────────────────────────────────────────── */
+    #ascii-wrap {
+      flex:1; overflow:auto; position:relative; background:#000;
+    }
+    #ascii-wrap::-webkit-scrollbar { width:5px; height:5px }
+    #ascii-wrap::-webkit-scrollbar-track  { background:#000 }
+    #ascii-wrap::-webkit-scrollbar-thumb  { background:var(--amber-glow); border-radius:3px }
+    #ascii-wrap::-webkit-scrollbar-thumb:hover { background:var(--amber-glow2) }
+
+    #ascii-output {
+      font-family:'IBM Plex Mono',monospace; white-space:pre; display:block; margin:0;
+      line-height:1.18; letter-spacing:0.02em; padding:1rem; min-height:100%;
+      transform-origin:top left;
+    }
+    #ascii-output.out-dark  { color:var(--amber); background:#000; text-shadow:0 0 3px var(--amber-glow2) }
+    #ascii-output.out-green { color:#33ff66; background:#001500; text-shadow:0 0 3px rgba(51,255,102,0.45) }
+    #ascii-output.out-light { color:#1a1a0f; background:#f5f0e4; text-shadow:none }
+    #ascii-output.out-white { color:#fff;    background:#0d0d0d; text-shadow:none }
+    #ascii-output.out-blue  { color:#60cfff; background:#000d1a; text-shadow:0 0 3px rgba(96,207,255,0.4) }
+    #ascii-output.out-pink  { color:#ff6eb4; background:#1a0010; text-shadow:0 0 3px rgba(255,110,180,0.4) }
+
+    /* Colored ASCII mode — each char can be individually colored via inline spans */
+    #ascii-output.colored-mode span { display:inline }
+
+    /* Reveal */
+    #ascii-output.reveal { animation:ascii-reveal 0.35s ease both }
+    @keyframes ascii-reveal {
+      from { opacity:0; filter:blur(3px); transform:scale(0.995) }
+      to   { opacity:1; filter:blur(0);   transform:scale(1) }
+    }
+
+    /* ── Typewriter / generation animation ─────────────────────────────── */
+    /* The generation cursor line */
+    #gen-cursor {
+      position:absolute; left:0; right:0; height:2px; pointer-events:none; z-index:20;
+      background:linear-gradient(90deg, transparent 0%, var(--amber) 20%, var(--amber) 80%, transparent 100%);
+      box-shadow:0 0 10px var(--amber), 0 0 24px var(--amber-glow2), 0 0 2px var(--amber);
+      opacity:0; transition:top 0s;
+    }
+    #gen-cursor.active { opacity:1 }
+    /* Leading glow band above cursor */
+    #gen-cursor::before {
+      content:''; position:absolute; left:0; right:0; bottom:2px; height:20px;
+      background:linear-gradient(0deg, var(--amber-glow) 0%, transparent 100%);
+    }
+    /* Typewriter text reveals from top */
+    #ascii-output.typewriter-mode { overflow:hidden }
+
+    /* ── Scan sweep ────────────────────────────────────────────────────── */
+    #scan-sweep {
+      position:absolute; left:0; right:0; height:3px;
+      background:linear-gradient(90deg,transparent,var(--amber),transparent);
+      opacity:0; pointer-events:none;
+      box-shadow:0 0 12px var(--amber), 0 0 24px var(--amber-glow2);
+    }
+    #scan-sweep.sweeping { animation:sweep-down 0.8s ease-in-out }
+    @keyframes sweep-down {
+      0%   { top:0;    opacity:0.9 }
+      80%  { top:100%; opacity:0.6 }
+      100% { top:100%; opacity:0 }
+    }
+
+    /* ── Particle burst canvas ─────────────────────────────────────────── */
+    #particle-canvas {
+      position:absolute; inset:0; pointer-events:none; z-index:30; opacity:0;
+      transition:opacity 0.3s;
+    }
+    #particle-canvas.show { opacity:1 }
+
+    /* ── Placeholder ───────────────────────────────────────────────────── */
+    #placeholder {
+      display:flex; flex-direction:column; align-items:center; justify-content:center;
+      height:100%; gap:1.5rem; padding:2rem; position:absolute; inset:0;
+    }
+    .ph-art {
+      font-family:'IBM Plex Mono',monospace; font-size:8px; line-height:1.2;
+      color:rgba(245,166,35,0.09); user-select:none; text-align:left;
+      animation:ph-float 6s ease-in-out infinite;
+    }
+    @keyframes ph-float { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-6px)} }
+    .ph-msg {
+      font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--text-muted);
+      letter-spacing:0.16em; text-transform:uppercase; display:flex; align-items:center; gap:0.5rem;
+    }
+    .ph-cursor {
+      display:inline-block; width:8px; height:1.1em; background:var(--amber); opacity:0.5;
+      animation:cur-blink 1s step-end infinite;
+    }
+    @keyframes cur-blink { 0%,100%{opacity:0.5} 50%{opacity:0} }
+
+    /* ── Matrix rain bg ────────────────────────────────────────────────── */
+    #matrix-bg { position:absolute; inset:0; opacity:0.04; pointer-events:none; z-index:0 }
+    #ascii-wrap > *:not(#matrix-bg) { position:relative; z-index:1 }
+
+    /* ── Loading overlay ───────────────────────────────────────────────── */
+    #loading {
+      display:none; position:absolute; inset:0; background:rgba(7,7,10,0.85);
+      align-items:center; justify-content:center; flex-direction:column; gap:1rem; z-index:50;
+      backdrop-filter:blur(4px);
+    }
+    #loading.show { display:flex }
+    @keyframes ring-spin { to{transform:rotate(360deg)} }
+    .ld-label { font-family:'IBM Plex Mono',monospace; font-size:10px; color:var(--amber); letter-spacing:0.16em; text-transform:uppercase; animation:s-blink 1s ease infinite }
+    .ld-bar   { width:180px; height:2px; background:var(--border); border-radius:1px; overflow:hidden }
+    .ld-bar-fill {
+      height:100%; background:var(--amber); border-radius:1px;
+      width:0; box-shadow:0 0 8px var(--amber);
+      transition:width 0.1s ease;
+    }
+    .ld-row-count { font-family:'IBM Plex Mono',monospace; font-size:9px; color:var(--text-muted); letter-spacing:0.08em }
+
+    /* ── Toast ─────────────────────────────────────────────────────────── */
+    #toast {
+      position:fixed; bottom:2rem;
+      left:calc(var(--sidebar-w) + (100vw - var(--sidebar-w))/2);
+      transform:translateX(-50%) translateY(8px);
+      background:var(--amber); color:#070709; padding:0.4rem 1.3rem; border-radius:3px;
+      font-family:'IBM Plex Mono',monospace; font-size:10px; font-weight:600;
+      letter-spacing:0.1em; text-transform:uppercase; z-index:9999; opacity:0;
+      transition:all 0.28s ease; pointer-events:none;
+    }
+    #toast.show { opacity:1; transform:translateX(-50%) translateY(0) }
+
+    /* ── Undo / History indicator ──────────────────────────────────────── */
+    .history-dots { display:flex; gap:3px; align-items:center }
+    .h-dot {
+      width:5px; height:5px; border-radius:50%; background:var(--border-mid);
+      transition:background 0.2s, transform 0.2s;
+    }
+    .h-dot.filled { background:var(--amber); box-shadow:0 0 4px var(--amber) }
+    .h-dot.current { transform:scale(1.3) }
+
+    /* ── Split view ────────────────────────────────────────────────────── */
+    #split-divider {
+      display:none; position:absolute; top:0; bottom:0; width:3px;
+      background:var(--amber); cursor:col-resize; z-index:40;
+      box-shadow:0 0 8px var(--amber);
+    }
+    #image-overlay {
+      display:none; position:absolute; top:0; bottom:0; left:0; overflow:hidden;
+      pointer-events:none; z-index:35;
+    }
+    #image-overlay img { height:100%; object-fit:contain; object-position:left; opacity:0.85; filter:grayscale(0.3) }
+    .split-active #split-divider, .split-active #image-overlay { display:block }
+  </style>
+</head>
+<body>
+  <div id="crt"></div>
+  <div id="vignette"></div>
+  <div id="toast"></div>
+  <canvas id="canvas"></canvas>
+  <input type="file" id="file-input" accept="image/*">
+
+  <!-- ── Sidebar ──────────────────────────────────────────────── -->
+  <aside id="sidebar">
+    <div class="sb-header">
+      <div class="logo-eyebrow">// terminal_ascii · v3.0</div>
+      <div class="logo" data-text="ASCII ART GEN">ASCII ART GEN</div>
+      <span class="logo-sub">pixel → character → art</span>
+    </div>
+
+    <!-- Upload -->
+    <div class="sb-section fixed">
+      <div class="section-label">Input Image</div>
+      <div id="drop-zone" onclick="document.getElementById('file-input').click()"
+           ondragover="onDragOver(event)" ondragleave="onDragLeave(event)" ondrop="onDrop(event)">
+        <svg class="up-icon" viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1.3">
+          <rect x="2" y="5" width="24" height="18" rx="2"/>
+          <path d="M14 20V12M14 12l-4 4M14 12l4 4" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M8 5V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v1" opacity="0.4"/>
+        </svg>
+        <div class="up-title">DRAG &amp; DROP IMAGE</div>
+        <div class="up-sub">or click to browse</div>
+        <div class="up-sub">JPG · PNG · GIF · WEBP</div>
+      </div>
+      <div id="preview-wrap" onclick="document.getElementById('file-input').click()"
+           ondragover="onDragOver(event)" ondragleave="onDragLeave(event)" ondrop="onDrop(event)" title="Click or drag to replace">
+        <img id="preview-img" alt="Preview">
+        <div class="preview-bar"><span id="fname">—</span><span id="fdims">—</span></div>
+      </div>
+    </div>
+
+    <!-- Scrollable settings -->
+    <div class="sb-section scrollable">
+
+      <!-- Resolution -->
+      <div class="sb-subsection">
+        <div class="section-label">Resolution</div>
+        <div class="cg">
+          <div class="cl">Output Width <span class="cv" id="lw">100 cols</span></div>
+          <input type="range" id="r-w" min="40" max="300" value="100" step="5" oninput="rui(this,'lw',v=>v+' cols')">
+        </div>
+        <div class="cg">
+          <div class="cl">Font Size <span class="cv" id="lfs">7px</span></div>
+          <input type="range" id="r-fs" min="4" max="16" value="7" step="1"
+            oninput="rui(this,'lfs',v=>v+'px');setFs(+this.value)">
+        </div>
+        <div class="cg">
+          <div class="cl">Letter Spacing <span class="cv" id="lls">0.02em</span></div>
+          <input type="range" id="r-ls" min="0" max="20" value="2" step="1"
+            oninput="rui(this,'lls',v=>(v/100).toFixed(2)+'em');setLetterSpacing(+this.value)">
+        </div>
+      </div>
+
+      <!-- Adjustments -->
+      <div class="sb-subsection">
+        <div class="section-label">Adjustments</div>
+        <div class="cg">
+          <div class="cl">Brightness <span class="cv" id="lb">0</span></div>
+          <input type="range" id="r-b" min="-100" max="100" value="0" step="1"
+            oninput="rui(this,'lb',v=>(v>0?'+':'')+v)">
+        </div>
+        <div class="cg">
+          <div class="cl">Contrast <span class="cv" id="lc">1.0×</span></div>
+          <input type="range" id="r-c" min="50" max="300" value="100" step="5"
+            oninput="rui(this,'lc',v=>(v/100).toFixed(1)+'×')">
+        </div>
+        <div class="cg">
+          <div class="cl">Gamma <span class="cv" id="lgam">1.0</span></div>
+          <input type="range" id="r-gam" min="50" max="250" value="100" step="5"
+            oninput="rui(this,'lgam',v=>(v/100).toFixed(1))">
+        </div>
+        <div class="cg">
+          <div class="cl">Sharpening <span class="cv" id="lsh">20%</span></div>
+          <input type="range" id="r-sh" min="0" max="100" value="20" step="5" oninput="rui(this,'lsh',v=>v+'%')">
+        </div>
+        <div class="cg">
+          <div class="cl">Dithering</div>
+          <div class="tr">
+            <button class="tb" id="dith-n" onclick="setDither(false)">Off</button>
+            <button class="tb active" id="dith-y" onclick="setDither(true)">F-S On</button>
+          </div>
+        </div>
+        <div class="cg">
+          <div class="cl">Invert</div>
+          <div class="tr">
+            <button class="tb active" id="inv-n" onclick="setInvert(false)">Normal</button>
+            <button class="tb" id="inv-y" onclick="setInvert(true)">Inverted</button>
+          </div>
+        </div>
+        <div class="cg">
+          <div class="cl">Flip</div>
+          <div class="tr">
+            <button class="tb" id="flip-h" onclick="toggleFlip('h')">H-Mirror</button>
+            <button class="tb" id="flip-v" onclick="toggleFlip('v')">V-Flip</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Filter -->
+      <div class="sb-subsection">
+        <div class="section-label">Filter Mode</div>
+        <div class="cg">
+          <div class="tr">
+            <button class="tb active" id="fm-normal" onclick="setFilter('normal')">Normal</button>
+            <button class="tb" id="fm-edge" onclick="setFilter('edge')">Edges</button>
+            <button class="tb" id="fm-emboss" onclick="setFilter('emboss')">Emboss</button>
+          </div>
+        </div>
+        <div class="cg">
+          <div class="cl">Color Mode</div>
+          <div class="tr">
+            <button class="tb active" id="col-off" onclick="setColorMode(false)">Mono</button>
+            <button class="tb" id="col-on" onclick="setColorMode(true)">Color</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Style -->
+      <div class="sb-subsection">
+        <div class="section-label">Style</div>
+        <div class="cg">
+          <div class="cl">Character Set</div>
+          <select id="cset" onchange="onCsetChange()">
+            <option value="standard">Standard — @%#*+=-:. </option>
+            <option value="dense">Dense — $@B%8&amp;WM#*oah</option>
+            <option value="blocks">Blocks — █▓▒░ </option>
+            <option value="minimal">Minimal — #=:. </option>
+            <option value="slant">Slant — /\|!;:,'. </option>
+            <option value="braille">Braille — ⣿⣷⣯⣟⡿ </option>
+            <option value="dots">Dots — ●◉◎○ </option>
+            <option value="custom">Custom…</option>
+          </select>
+          <input type="text" id="cust-chars" style="display:none;margin-top:0.45rem"
+            placeholder="Characters dark→light" value="@%#*+=-:. ">
+        </div>
+        <div class="cg">
+          <div class="cl">Color Theme</div>
+          <div class="tr">
+            <button class="tb active" id="th-dark"  onclick="setTheme('out-dark')">Amber</button>
+            <button class="tb" id="th-green" onclick="setTheme('out-green')">Green</button>
+            <button class="tb" id="th-light" onclick="setTheme('out-light')">Paper</button>
+            <button class="tb" id="th-white" onclick="setTheme('out-white')">White</button>
+          </div>
+          <div class="tr" style="margin-top:0.35rem">
+            <button class="tb" id="th-blue" onclick="setTheme('out-blue')">Blue</button>
+            <button class="tb" id="th-pink" onclick="setTheme('out-pink')">Pink</button>
+          </div>
+        </div>
+        <div class="cg">
+          <div class="cl" style="margin-bottom:0.4rem">Presets</div>
+          <div class="pc-row">
+            <button class="pc" onclick="preset('photo')">Photo</button>
+            <button class="pc" onclick="preset('dense')">Dense</button>
+            <button class="pc" onclick="preset('sketch')">Sketch</button>
+            <button class="pc" onclick="preset('bold')">Bold</button>
+            <button class="pc" onclick="preset('wide')">Wide</button>
+            <button class="pc" onclick="preset('micro')">Micro</button>
+            <button class="pc" onclick="preset('edge')">Edge</button>
+            <button class="pc" onclick="preset('retro')">Retro</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Animation -->
+      <div class="sb-subsection">
+        <div class="section-label">Generation</div>
+        <div class="cg">
+          <div class="cl">Animation Style</div>
+          <div class="tr">
+            <button class="tb active" id="an-scan" onclick="setAnimMode('scan')">Scan</button>
+            <button class="tb" id="an-type" onclick="setAnimMode('type')">Type</button>
+            <button class="tb" id="an-instant" onclick="setAnimMode('instant')">Instant</button>
+          </div>
+        </div>
+        <div class="cg" id="speed-group">
+          <div class="cl">Speed <span class="cv" id="l-speed">Fast</span></div>
+          <input type="range" id="r-speed" min="1" max="5" value="4" step="1"
+            oninput="rui(this,'l-speed',v=>['Slowest','Slow','Medium','Fast','Turbo'][v-1])">
+        </div>
+      </div>
+
+    </div><!-- end scrollable -->
+
+    <!-- Convert + stats -->
+    <div class="sb-section fixed">
+      <button id="convert-btn" onclick="doConvert()" disabled>▶ &nbsp;Generate ASCII</button>
+      <div id="stats-bar">
+        <div class="stat">Time: <span class="stat-val" id="st-time">—</span></div>
+        <div class="stat">Chars: <span class="stat-val" id="st-chars">—</span></div>
+        <div class="stat">History:
+          <span class="history-dots" id="hist-dots">
+            <span class="h-dot"></span><span class="h-dot"></span><span class="h-dot"></span>
+            <span class="h-dot"></span><span class="h-dot"></span>
+          </span>
+        </div>
+      </div>
+    </div>
+
+  </aside>
+
+  <!-- ── Main output ─────────────────────────────────────────── -->
+  <main id="main">
+    <div id="out-topbar">
+      <div class="out-led idle" id="out-led"></div>
+      <span class="out-title">ASCII Output</span>
+      <span class="out-meta" id="out-meta"></span>
+      <div class="zoom-group">
+        <button class="zoom-btn" onclick="changeZoom(-0.25)" title="Zoom out">−</button>
+        <span class="zoom-label" id="zoom-lbl">100%</span>
+        <button class="zoom-btn" onclick="changeZoom(+0.25)" title="Zoom in">+</button>
+        <button class="zoom-btn" onclick="resetZoom()" title="Reset zoom" style="font-size:8px;padding:2px 5px">RST</button>
+      </div>
+    </div>
+
+    <div id="out-toolbar">
+      <button class="t-btn" onclick="doCopy()">
+        <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.3">
+          <rect x="4" y="4" width="7" height="7" rx="1"/>
+          <path d="M1 8V2a1 1 0 0 1 1-1h6" stroke-linecap="round"/>
+        </svg>Copy
+      </button>
+      <button class="t-btn" onclick="doTxt()">
+        <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.3">
+          <path d="M6 1v7M3 5l3 3 3-3" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M1 10h10" stroke-linecap="round"/>
+        </svg>.txt
+      </button>
+      <button class="t-btn" onclick="doPng()">
+        <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.3">
+          <rect x="1" y="1" width="10" height="10" rx="1"/>
+          <path d="M1 8l3-3 2 2 2-2 3 3" stroke-linecap="round" stroke-linejoin="round"/>
+          <circle cx="8.5" cy="3.5" r="1"/>
+        </svg>PNG
+      </button>
+      <button class="t-btn" onclick="doHtml()">
+        <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.3">
+          <path d="M3 4L1 6l2 2M9 4l2 2-2 2M7 2l-2 8" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>HTML
+      </button>
+      <button class="t-btn" onclick="doUndo()" id="undo-btn" style="opacity:0.35;pointer-events:none">
+        <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.3">
+          <path d="M2 6a4 4 0 1 1 .5 2" stroke-linecap="round"/>
+          <path d="M2 3v3h3" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>Undo
+      </button>
+      <button class="t-btn" onclick="toggleSplit()" id="split-btn">
+        <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.3">
+          <rect x="1" y="1" width="4" height="10" rx="1"/>
+          <rect x="7" y="1" width="4" height="10" rx="1"/>
+        </svg>Split
+      </button>
+      <div class="tsep"></div>
+      <span class="s-pill s-idle" id="status">IDLE</span>
+    </div>
+
+    <div id="ascii-wrap">
+      <canvas id="matrix-bg"></canvas>
+      <div id="scan-sweep"></div>
+      <div id="gen-cursor"></div>
+      <canvas id="particle-canvas"></canvas>
+
+      <!-- Split view overlays -->
+      <div id="image-overlay"><img id="split-img" alt=""></div>
+      <div id="split-divider"></div>
+
+      <div id="loading">
+        <div class="ld-bar"><div class="ld-bar-fill" id="ld-fill"></div></div>
+        <div class="ld-row-count" id="ld-rows">Initialising…</div>
+        <div class="ld-label">Generating</div>
+      </div>
+
+      <div id="placeholder">
+        <pre class="ph-art">
+ ██████  ██████  ██████  ███████
+██      ██    ██ ██   ██ ██
+██      ██    ██ ██   ██ █████
+██      ██    ██ ██   ██ ██
+ ██████  ██████  ██████  ███████
+        </pre>
+        <div class="ph-msg"><span>Upload an image to begin</span><span class="ph-cursor"></span></div>
+      </div>
+
+      <pre id="ascii-output" class="out-dark" style="display:none;font-size:7px"></pre>
+    </div>
+  </main>
+
+  <script>
+    // ── State ──────────────────────────────────────────────────────────────────
+    let imgEl      = null;
+    let inverted   = false;
+    let useDither  = true;
+    let flipH      = false;
+    let flipV      = false;
+    let filterMode = 'normal';  // 'normal' | 'edge' | 'emboss'
+    let colorMode  = false;
+    let animMode   = 'scan';    // 'scan' | 'type' | 'instant'
+    let theme      = 'out-dark';
+    let fs         = 7;
+    let currentZoom = 1;
+    let lastAscii  = '';
+    let lastLines  = [];        // array of rows for typewriter
+    let lastPixels = null;      // for colored mode
+    let splitActive = false;
+    let genTimer   = null;      // typewriter interval handle
+
+    // History (up to 5)
+    const HISTORY   = [];
+    const HIST_MAX  = 5;
+
+    const THEMES     = ['out-dark','out-green','out-light','out-white','out-blue','out-pink'];
+    const THEME_BTNS = ['th-dark','th-green','th-light','th-white','th-blue','th-pink'];
+
+    // ── Accent Colors ──────────────────────────────────────────────────────────
+    const ACCENT_COLORS = [
+      { primary:'#f5a623', dim:'#c47d0e', glow:'rgba(245,166,35,0.12)', glow2:'rgba(245,166,35,0.22)', glow3:'rgba(245,166,35,0.04)', text:'#e8d5a3' },
+      { primary:'#ff6b6b', dim:'#cc3333', glow:'rgba(255,107,107,0.12)',glow2:'rgba(255,107,107,0.22)',glow3:'rgba(255,107,107,0.04)',text:'#ffe0e0' },
+      { primary:'#4ecdc4', dim:'#2a9e8c', glow:'rgba(78,205,196,0.12)', glow2:'rgba(78,205,196,0.22)', glow3:'rgba(78,205,196,0.04)', text:'#d0f5f3' },
+      { primary:'#aa96da', dim:'#8872b0', glow:'rgba(170,150,218,0.12)',glow2:'rgba(170,150,218,0.22)',glow3:'rgba(170,150,218,0.04)',text:'#f0ebff' },
+      { primary:'#a7c957', dim:'#85a046', glow:'rgba(167,201,87,0.12)', glow2:'rgba(167,201,87,0.22)', glow3:'rgba(167,201,87,0.04)', text:'#e8f4d8' },
+      { primary:'#4d96ff', dim:'#3d75cc', glow:'rgba(77,150,255,0.12)', glow2:'rgba(77,150,255,0.22)', glow3:'rgba(77,150,255,0.04)', text:'#dce8ff' },
+      { primary:'#ff006e', dim:'#cc0558', glow:'rgba(255,0,110,0.12)',  glow2:'rgba(255,0,110,0.22)',  glow3:'rgba(255,0,110,0.04)',  text:'#ffe0e8' },
+      { primary:'#ffbe0b', dim:'#cc9609', glow:'rgba(255,190,11,0.12)', glow2:'rgba(255,190,11,0.22)', glow3:'rgba(255,190,11,0.04)', text:'#fffae0' }
+    ];
+
+    function initAccentColor() {
+      const c = ACCENT_COLORS[Math.floor(Math.random() * ACCENT_COLORS.length)];
+      const r = document.documentElement;
+      r.style.setProperty('--amber',      c.primary);
+      r.style.setProperty('--amber-dim',  c.dim);
+      r.style.setProperty('--amber-glow', c.glow);
+      r.style.setProperty('--amber-glow2',c.glow2);
+      r.style.setProperty('--amber-glow3',c.glow3);
+      r.style.setProperty('--text',       c.text);
+    }
+
+    const CHARSETS = {
+      standard: '@%#*+=-:. ',
+      dense:    '$@B%8&WM#*oahkbdpqwmZO0QLCJUYXzcvunxrjft/|()1{}[]?-_+~<>i!lI;:,"^`. ',
+      blocks:   '\u2588\u2593\u2592\u2591 ',
+      minimal:  '#=:. ',
+      slant:    '/\\|!;:,\'. ',
+      braille:  '\u28FF\u28F7\u28EF\u287F\u29FF\u28BF\u28DF\u28FE\u283F\u281F\u280F\u2807\u2803\u2801\u2800',
+      dots:     '\u25CF\u25C9\u25CE\u25CB\u00B7 '
+    };
+
+    const PRESETS = {
+      photo:  { w:120, b:0,   c:100, gam:100, sh:25,  d:true,  inv:false, cs:'standard', fm:'normal' },
+      dense:  { w:180, b:-10, c:140, gam:90,  sh:40,  d:true,  inv:false, cs:'dense',    fm:'normal' },
+      sketch: { w:100, b:10,  c:160, gam:110, sh:60,  d:false, inv:false, cs:'minimal',  fm:'normal' },
+      bold:   { w:80,  b:-20, c:200, gam:80,  sh:0,   d:false, inv:false, cs:'blocks',   fm:'normal' },
+      wide:   { w:240, b:0,   c:110, gam:100, sh:15,  d:true,  inv:false, cs:'standard', fm:'normal' },
+      micro:  { w:50,  b:0,   c:120, gam:100, sh:50,  d:true,  inv:false, cs:'dense',    fm:'normal' },
+      edge:   { w:100, b:0,   c:200, gam:100, sh:0,   d:false, inv:false, cs:'minimal',  fm:'edge'   },
+      retro:  { w:80,  b:-15, c:180, gam:120, sh:30,  d:true,  inv:false, cs:'slant',    fm:'normal' }
+    };
+
+    // ── Range UI ───────────────────────────────────────────────────────────────
+    function rui(el, lid, fmt) {
+      document.getElementById(lid).textContent = fmt(el.value);
+      const pct = ((+el.value - +el.min) / (+el.max - +el.min) * 100).toFixed(1) + '%';
+      el.style.setProperty('--pct', pct);
+    }
+
+    // ── Controls ───────────────────────────────────────────────────────────────
+    function onCsetChange() {
+      document.getElementById('cust-chars').style.display =
+        document.getElementById('cset').value === 'custom' ? 'block' : 'none';
+    }
+    function getCharset() {
+      const v = document.getElementById('cset').value;
+      if (v === 'custom') return document.getElementById('cust-chars').value || '@%#*+=-:. ';
+      return CHARSETS[v] || CHARSETS.standard;
+    }
+    function setInvert(v)    { inverted = v;    document.getElementById('inv-n').classList.toggle('active',!v); document.getElementById('inv-y').classList.toggle('active',v);    liveConvert(); }
+    function setDither(v)    { useDither = v;   document.getElementById('dith-n').classList.toggle('active',!v);document.getElementById('dith-y').classList.toggle('active',v);   liveConvert(); }
+    function toggleFlip(axis) {
+      if (axis === 'h') { flipH = !flipH; document.getElementById('flip-h').classList.toggle('active', flipH); }
+      else              { flipV = !flipV; document.getElementById('flip-v').classList.toggle('active', flipV); }
+      liveConvert();
+    }
+    function setFilter(fm) {
+      filterMode = fm;
+      ['normal','edge','emboss'].forEach(m => document.getElementById('fm-'+m).classList.toggle('active', m===fm));
+      liveConvert();
+    }
+    function setColorMode(v) {
+      colorMode = v;
+      document.getElementById('col-off').classList.toggle('active',!v);
+      document.getElementById('col-on').classList.toggle('active', v);
+      if (lastLines.length) renderOutput();
+    }
+    function setAnimMode(m) {
+      animMode = m;
+      ['scan','type','instant'].forEach(a => document.getElementById('an-'+a).classList.toggle('active', a===m));
+      document.getElementById('speed-group').style.display = m === 'instant' ? 'none' : 'block';
+    }
+    function setTheme(t) {
+      theme = t;
+      const out = document.getElementById('ascii-output');
+      THEMES.forEach(c => out.classList.remove(c));
+      out.classList.add(t);
+      THEME_BTNS.forEach((id,i) => document.getElementById(id)?.classList.toggle('active', THEMES[i]===t));
+    }
+    function setFs(sz) {
+      fs = sz;
+      document.getElementById('ascii-output').style.fontSize = sz + 'px';
+    }
+    function setLetterSpacing(v) {
+      document.getElementById('ascii-output').style.letterSpacing = (v/100).toFixed(2) + 'em';
+    }
+
+    // ── Zoom ───────────────────────────────────────────────────────────────────
+    function changeZoom(delta) {
+      currentZoom = Math.max(0.25, Math.min(4, currentZoom + delta));
+      applyZoom();
+    }
+    function resetZoom() { currentZoom = 1; applyZoom(); }
+    function applyZoom() {
+      document.getElementById('ascii-output').style.transform = `scale(${currentZoom})`;
+      document.getElementById('zoom-lbl').textContent = Math.round(currentZoom*100) + '%';
+    }
+
+    // ── Split view ─────────────────────────────────────────────────────────────
+    function toggleSplit() {
+      if (!imgEl) { toast('Load an image first'); return; }
+      splitActive = !splitActive;
+      const wrap = document.getElementById('ascii-wrap');
+      wrap.classList.toggle('split-active', splitActive);
+      document.getElementById('split-btn').classList.toggle('active', splitActive);
+      if (splitActive) {
+        document.getElementById('split-img').src = document.getElementById('preview-img').src;
+        initSplitDrag();
+        document.getElementById('split-divider').style.left = '50%';
+        document.getElementById('image-overlay').style.width = '50%';
+      }
+    }
+    function initSplitDrag() {
+      const div = document.getElementById('split-divider');
+      const ov  = document.getElementById('image-overlay');
+      const wrap = document.getElementById('ascii-wrap');
+      div.onmousedown = e => {
+        e.preventDefault();
+        const move = ev => {
+          const rect = wrap.getBoundingClientRect();
+          const pct = Math.max(10, Math.min(90, (ev.clientX - rect.left) / rect.width * 100));
+          div.style.left = pct + '%';
+          ov.style.width = pct + '%';
+        };
+        document.addEventListener('mousemove', move);
+        document.addEventListener('mouseup', () => document.removeEventListener('mousemove', move), {once:true});
+      };
+    }
+
+    // ── Presets ────────────────────────────────────────────────────────────────
+    function preset(name) {
+      const p = PRESETS[name]; if (!p) return;
+      const rw  = document.getElementById('r-w');
+      const rb  = document.getElementById('r-b');
+      const rc  = document.getElementById('r-c');
+      const rsh = document.getElementById('r-sh');
+      const rg  = document.getElementById('r-gam');
+      rw.value=p.w;   rui(rw,'lw',  v=>v+' cols');
+      rb.value=p.b;   rui(rb,'lb',  v=>(v>0?'+':'')+v);
+      rc.value=p.c;   rui(rc,'lc',  v=>(v/100).toFixed(1)+'×');
+      rsh.value=p.sh; rui(rsh,'lsh',v=>v+'%');
+      rg.value=p.gam; rui(rg,'lgam',v=>(v/100).toFixed(1));
+      document.getElementById('cset').value = p.cs;
+      document.getElementById('cust-chars').style.display = 'none';
+      setFilter(p.fm);
+      setInvert(p.inv);
+      setDither(p.d);
+    }
+
+    // ── File load ──────────────────────────────────────────────────────────────
+    document.getElementById('file-input').addEventListener('change', e => {
+      if (e.target.files[0]) loadFile(e.target.files[0]);
+    });
+    function onDragOver(e) {
+      e.preventDefault();
+      const t = document.getElementById('preview-wrap').style.display === 'block' ? 'preview-wrap' : 'drop-zone';
+      document.getElementById(t).classList.add('drag-over');
+    }
+    function onDragLeave() {
+      document.getElementById('drop-zone').classList.remove('drag-over');
+      document.getElementById('preview-wrap').classList.remove('drag-over');
+    }
+    function onDrop(e) {
+      e.preventDefault(); onDragLeave();
+      const f = e.dataTransfer.files[0];
+      if (f && f.type.startsWith('image/')) loadFile(f);
+      else toast('Please drop an image file');
+    }
+    function loadFile(file) {
+      const reader = new FileReader();
+      reader.onload = ev => {
+        const img = new Image();
+        img.onload = () => {
+          imgEl = img;
+          document.getElementById('preview-img').src = ev.target.result;
+          const n = file.name;
+          document.getElementById('fname').textContent = n.length > 26 ? n.slice(0,24)+'\u2026' : n;
+          document.getElementById('fdims').textContent = img.width + '\u00d7' + img.height + 'px';
+          document.getElementById('drop-zone').style.display = 'none';
+          document.getElementById('preview-wrap').style.display = 'block';
+          document.getElementById('convert-btn').disabled = false;
+          setLed('amber');
+          doConvert();
+        };
+        img.src = ev.target.result;
+      };
+      reader.readAsDataURL(file);
+    }
+
+    // ── LED / Status ───────────────────────────────────────────────────────────
+    function setLed(state) { document.getElementById('out-led').className = 'out-led ' + state }
+    function setStatus(s) {
+      const el = document.getElementById('status');
+      el.className = 's-pill';
+      if (s==='ok')   { el.classList.add('s-ok');   el.textContent = 'READY';      }
+      else if(s==='busy'){ el.classList.add('s-busy'); el.textContent = 'GENERATING'; }
+      else            { el.classList.add('s-idle'); el.textContent = 'IDLE';       }
+    }
+
+    // ── History ────────────────────────────────────────────────────────────────
+    function pushHistory(ascii) {
+      HISTORY.push(ascii);
+      if (HISTORY.length > HIST_MAX) HISTORY.shift();
+      updateHistoryUI();
+      const btn = document.getElementById('undo-btn');
+      btn.style.opacity = '1'; btn.style.pointerEvents = 'auto';
+    }
+    function doUndo() {
+      if (HISTORY.length < 2) return;
+      HISTORY.pop(); // discard current
+      const prev = HISTORY[HISTORY.length - 1];
+      lastAscii = prev;
+      lastLines = prev.split('\n');
+      renderOutput();
+      updateHistoryUI();
+      if (HISTORY.length < 2) {
+        const btn = document.getElementById('undo-btn');
+        btn.style.opacity = '0.35'; btn.style.pointerEvents = 'none';
+      }
+    }
+    function updateHistoryUI() {
+      const dots = document.getElementById('hist-dots').children;
+      for (let i = 0; i < dots.length; i++) {
+        dots[i].classList.toggle('filled',  i < HISTORY.length);
+        dots[i].classList.toggle('current', i === HISTORY.length - 1);
+      }
+    }
+
+    // ── Image Processing ───────────────────────────────────────────────────────
+    function applySharpen(ctx, w, h, amount) {
+      if (amount <= 0) return;
+      const imgData = ctx.getImageData(0,0,w,h);
+      const data = imgData.data;
+      const mix = amount / 100;
+      const weights = [0,-1,0,-1,5,-1,0,-1,0];
+      const src = new Uint8ClampedArray(data);
+      for (let y=0; y<h; y++) {
+        for (let x=0; x<w; x++) {
+          const dstOff = (y*w+x)*4;
+          let r=0, g=0, b=0;
+          for (let cy=0; cy<3; cy++) for (let cx=0; cx<3; cx++) {
+            const sy=y+cy-1, sx=x+cx-1;
+            if (sy>=0&&sy<h&&sx>=0&&sx<w) {
+              const sOff=(sy*w+sx)*4, wt=weights[cy*3+cx];
+              r+=src[sOff]*wt; g+=src[sOff+1]*wt; b+=src[sOff+2]*wt;
+            }
+          }
+          data[dstOff]   = src[dstOff]   + (r - src[dstOff])   * mix;
+          data[dstOff+1] = src[dstOff+1] + (g - src[dstOff+1]) * mix;
+          data[dstOff+2] = src[dstOff+2] + (b - src[dstOff+2]) * mix;
+        }
+      }
+      ctx.putImageData(imgData, 0, 0);
+    }
+
+    function applyEdge(grays, w, h) {
+      const out = new Float32Array(w * h);
+      for (let y=1; y<h-1; y++) {
+        for (let x=1; x<w-1; x++) {
+          const gx =
+            -grays[(y-1)*w+(x-1)] + grays[(y-1)*w+(x+1)]
+            -2*grays[y*w+(x-1)]   + 2*grays[y*w+(x+1)]
+            -grays[(y+1)*w+(x-1)] + grays[(y+1)*w+(x+1)];
+          const gy =
+            -grays[(y-1)*w+(x-1)] - 2*grays[(y-1)*w+x] - grays[(y-1)*w+(x+1)]
+            +grays[(y+1)*w+(x-1)] + 2*grays[(y+1)*w+x] + grays[(y+1)*w+(x+1)];
+          out[y*w+x] = Math.min(255, Math.sqrt(gx*gx + gy*gy));
+        }
+      }
+      return out;
+    }
+
+    function applyEmboss(grays, w, h) {
+      const out = new Float32Array(w * h);
+      const kernel = [-2,-1,0,-1,1,1,0,1,2];
+      for (let y=1; y<h-1; y++) {
+        for (let x=1; x<w-1; x++) {
+          let sum = 128;
+          let k = 0;
+          for (let ky=-1; ky<=1; ky++) for (let kx=-1; kx<=1; kx++) {
+            sum += grays[(y+ky)*w+(x+kx)] * kernel[k++];
+          }
+          out[y*w+x] = Math.max(0, Math.min(255, sum));
+        }
+      }
+      return out;
+    }
+
+    // ── Build ASCII ────────────────────────────────────────────────────────────
+    function buildAscii() {
+      const cv  = document.getElementById('canvas');
+      const ctx = cv.getContext('2d');
+      const cols = +document.getElementById('r-w').value;
+      const rows = Math.round((imgEl.height / imgEl.width) * cols * 0.48);
+      cv.width = cols; cv.height = rows;
+
+      ctx.save();
+      if (flipH || flipV) {
+        ctx.translate(flipH ? cols : 0, flipV ? rows : 0);
+        ctx.scale(flipH ? -1 : 1, flipV ? -1 : 1);
+      }
+      ctx.drawImage(imgEl, 0, 0, cols, rows);
+      ctx.restore();
+
+      const sharpenAmt = +document.getElementById('r-sh').value;
+      if (sharpenAmt > 0) applySharpen(ctx, cols, rows, sharpenAmt);
+
+      const imgData  = ctx.getImageData(0, 0, cols, rows);
+      const data     = imgData.data;
+      const bright   = +document.getElementById('r-b').value;
+      const contrast = +document.getElementById('r-c').value / 100;
+      const gamma    = +document.getElementById('r-gam').value / 100;
+      const chars    = getCharset();
+      const maxIdx   = chars.length - 1;
+
+      // Extract luminance + color
+      const grays  = new Float32Array(cols * rows);
+      const colors = new Uint8Array(cols * rows * 3);
+
+      for (let y=0; y<rows; y++) {
+        for (let x=0; x<cols; x++) {
+          const i = (y*cols+x)*4;
+          let g = 0.2126*data[i] + 0.7152*data[i+1] + 0.0722*data[i+2];
+          g = (g + bright - 128) * contrast + 128;
+          g = Math.max(0, Math.min(255, g));
+          // Gamma correction
+          g = Math.pow(g / 255, 1/gamma) * 255;
+          if (inverted) g = 255 - g;
+          grays[y*cols+x] = g;
+          const ci = (y*cols+x)*3;
+          colors[ci]   = data[i];
+          colors[ci+1] = data[i+1];
+          colors[ci+2] = data[i+2];
+        }
+      }
+
+      // Apply filter
+      let finalGrays = grays;
+      if      (filterMode === 'edge')   finalGrays = applyEdge(grays, cols, rows);
+      else if (filterMode === 'emboss') finalGrays = applyEmboss(grays, cols, rows);
+
+      // Store pixels for color mode
+      lastPixels = { colors, cols, rows };
+
+      // Render chars
+      const lines = [];
+      if (useDither && filterMode === 'normal') {
+        const dg = new Float32Array(finalGrays);
+        for (let y=0; y<rows; y++) {
+          let row = '';
+          for (let x=0; x<cols; x++) {
+            const idx = y*cols+x;
+            const oldVal = dg[idx];
+            const charIdx = Math.max(0, Math.min(maxIdx, Math.round((oldVal/255)*maxIdx)));
+            const newVal  = (charIdx/maxIdx)*255;
+            dg[idx] = newVal;
+            row += chars[charIdx];
+            const err = oldVal - newVal;
+            if (x+1<cols)  dg[idx+1] += err*7/16;
+            if (y+1<rows) {
+              if (x-1>=0)  dg[(y+1)*cols+x-1] += err*3/16;
+                           dg[(y+1)*cols+x]   += err*5/16;
+              if (x+1<cols)dg[(y+1)*cols+x+1] += err*1/16;
+            }
+          }
+          lines.push(row);
+        }
+      } else {
+        for (let y=0; y<rows; y++) {
+          let row = '';
+          for (let x=0; x<cols; x++) {
+            const val = finalGrays[y*cols+x];
+            row += chars[Math.max(0, Math.min(maxIdx, Math.round((val/255)*maxIdx)))];
+          }
+          lines.push(row);
+        }
+      }
+      return lines;
+    }
+
+    // ── Render output (static or colored) ─────────────────────────────────────
+    function renderOutput() {
+      const out = document.getElementById('ascii-output');
+      out.style.display = 'block';
+      out.style.fontSize = fs + 'px';
+      THEMES.forEach(c => out.classList.remove(c));
+
+      if (colorMode && lastPixels) {
+        out.classList.add('colored-mode');
+        const { colors, cols } = lastPixels;
+        let html = '';
+        for (let y=0; y<lastLines.length; y++) {
+          const row = lastLines[y];
+          for (let x=0; x<row.length; x++) {
+            const ci = (y*cols+x)*3;
+            const r=colors[ci], g=colors[ci+1], b=colors[ci+2];
+            const bright = 0.2126*r + 0.7152*g + 0.0722*b;
+            // Boost saturation slightly
+            const bStr = bright > 20 ? `color:rgb(${r},${g},${b})` : `color:var(--text-muted)`;
+            html += `<span style="${bStr}">${row[x]}</span>`;
+          }
+          if (y < lastLines.length-1) html += '\n';
+        }
+        out.innerHTML = html;
+        // In color mode use dark bg always
+        out.style.background = '#000';
+        out.style.textShadow = 'none';
+      } else {
+        out.classList.remove('colored-mode');
+        out.classList.add(theme);
+        out.textContent = lastLines.join('\n');
+      }
+    }
+
+    // ── Generation animation ───────────────────────────────────────────────────
+    function animateGeneration(lines) {
+      const out    = document.getElementById('ascii-output');
+      const cursor = document.getElementById('gen-cursor');
+      const fill   = document.getElementById('ld-fill');
+      const rowLbl = document.getElementById('ld-rows');
+      const total  = lines.length;
+      const speed  = +document.getElementById('r-speed').value;
+      // rows per tick: 1 = slowest (1 row), 5 = turbo (all at once essentially)
+      const batchMap = [1, 2, 5, 10, 25];
+      const batch = batchMap[speed - 1];
+
+      if (animMode === 'instant') {
+        lastLines = lines;
+        lastAscii = lines.join('\n');
+        renderOutput();
+        out.classList.remove('reveal');
+        out.getBoundingClientRect();
+        out.classList.add('reveal');
+        finishGeneration(lines);
+        return;
+      }
+
+      // Scan or Type mode
+      let rendered = [];
+      out.style.display = 'block';
+      out.style.fontSize = fs + 'px';
+      THEMES.forEach(c => out.classList.remove(c));
+      if (!colorMode) out.classList.add(theme);
+
+      cursor.classList.add('active');
+      if (animMode === 'type') out.classList.add('typewriter-mode');
+
+      let row = 0;
+      clearInterval(genTimer);
+
+      const tickMs = Math.max(8, Math.round(60 / (batch * 2)));
+
+      genTimer = setInterval(() => {
+        const end = Math.min(row + batch, total);
+        for (let r = row; r < end; r++) rendered.push(lines[r]);
+        row = end;
+
+        // Update display
+        lastLines = [...rendered];
+        if (colorMode && lastPixels) {
+          // simplified: just do full render each tick in color mode
+          const { colors, cols } = lastPixels;
+          let html = '';
+          for (let y=0; y<rendered.length; y++) {
+            const rowStr = rendered[y];
+            for (let x=0; x<rowStr.length; x++) {
+              const ci=(y*cols+x)*3;
+              const rr=colors[ci],gg=colors[ci+1],bb=colors[ci+2];
+              html+=`<span style="color:rgb(${rr},${gg},${bb})">${rowStr[x]}</span>`;
+            }
+            if (y<rendered.length-1) html+='\n';
+          }
+          out.innerHTML = html;
+          out.style.background='#000'; out.style.textShadow='none';
+          out.classList.add('colored-mode');
+        } else {
+          out.classList.remove('colored-mode');
+          out.classList.add(theme);
+          out.textContent = rendered.join('\n');
+        }
+
+        // Progress
+        const pct = (row / total) * 100;
+        fill.style.width = pct + '%';
+        rowLbl.textContent = `Row ${row} / ${total}`;
+
+        // Move cursor
+        if (animMode === 'scan' || animMode === 'type') {
+          const lineH = fs * 1.18;
+          const cursorTop = (row / total) * (out.scrollHeight || 400);
+          cursor.style.top = Math.max(0, cursorTop - 1) + 'px';
+          // Auto-scroll to cursor
+          const wrap = document.getElementById('ascii-wrap');
+          if (cursorTop > wrap.scrollTop + wrap.clientHeight - 40) {
+            wrap.scrollTop = cursorTop - wrap.clientHeight + 60;
+          }
+        }
+
+        if (row >= total) {
+          clearInterval(genTimer);
+          cursor.classList.remove('active');
+          out.classList.remove('typewriter-mode');
+          document.getElementById('ascii-wrap').scrollTop = 0;
+          finishGeneration(lines);
+        }
+      }, tickMs);
+    }
+
+    function finishGeneration(lines) {
+      lastAscii = lines.join('\n');
+      lastLines = lines;
+      pushHistory(lastAscii);
+      const cols = +document.getElementById('r-w').value;
+      document.getElementById('out-meta').textContent = cols + '\u00d7' + lines.length + ' chars';
+      document.getElementById('st-chars').textContent = (lastAscii.replace(/\n/g,'').length).toLocaleString();
+      setStatus('ok'); setLed('green');
+      document.getElementById('loading').classList.remove('show');
+      document.getElementById('convert-btn').classList.remove('running');
+      triggerSweep();
+      spawnParticles();
+      const logo = document.querySelector('.logo');
+      if (logo) setTimeout(() => logo.classList.remove('generating'), 600);
+    }
+
+    // ── doConvert ──────────────────────────────────────────────────────────────
+    function doConvert() {
+      if (!imgEl) return;
+      clearInterval(genTimer);
+      setStatus('busy'); setLed('amber');
+
+      const loading = document.getElementById('loading');
+      const fill    = document.getElementById('ld-fill');
+      const logo    = document.querySelector('.logo');
+      const btn     = document.getElementById('convert-btn');
+
+      loading.classList.add('show');
+      document.getElementById('placeholder').style.display = 'none';
+      btn.classList.add('running');
+
+      fill.style.width = '0%';
+      document.getElementById('ld-rows').textContent = 'Initialising…';
+
+      if (logo) { logo.classList.remove('generating'); logo.getBoundingClientRect(); logo.classList.add('generating') }
+
+      const t0 = performance.now();
+
+      setTimeout(() => {
+        try {
+          const lines = buildAscii();
+          const elapsed = ((performance.now() - t0) / 1000).toFixed(2) + 's';
+          document.getElementById('st-time').textContent = elapsed;
+          animateGeneration(lines);
+        } catch(e) {
+          setStatus('idle'); setLed('idle');
+          loading.classList.remove('show');
+          btn.classList.remove('running');
+          if (logo) logo.classList.remove('generating');
+          console.error(e);
+        }
+      }, 30);
+    }
+
+    function triggerSweep() {
+      const s = document.getElementById('scan-sweep');
+      s.classList.remove('sweeping');
+      s.getBoundingClientRect();
+      s.classList.add('sweeping');
+      s.addEventListener('animationend', () => s.classList.remove('sweeping'), {once:true});
+    }
+
+    // ── Particle burst ─────────────────────────────────────────────────────────
+    function spawnParticles() {
+      const pc  = document.getElementById('particle-canvas');
+      const wrap = document.getElementById('ascii-wrap');
+      pc.width  = wrap.clientWidth;
+      pc.height = wrap.clientHeight;
+      const ctx = pc.getContext('2d');
+      const accent = getComputedStyle(document.documentElement).getPropertyValue('--amber').trim();
+      pc.classList.add('show');
+
+      const particles = Array.from({length:60}, () => ({
+        x:  Math.random() * pc.width,
+        y:  Math.random() * pc.height,
+        vx: (Math.random()-0.5) * 3,
+        vy: (Math.random()-0.5) * 3 - 1,
+        r:  Math.random() * 3 + 1,
+        life: 1
+      }));
+
+      let frame;
+      (function tick() {
+        ctx.clearRect(0, 0, pc.width, pc.height);
+        let alive = false;
+        particles.forEach(p => {
+          p.x += p.vx; p.y += p.vy; p.vy += 0.08;
+          p.life -= 0.025;
+          if (p.life <= 0) return;
+          alive = true;
+          ctx.globalAlpha = p.life;
+          ctx.fillStyle   = accent;
+          ctx.shadowBlur  = 6;
+          ctx.shadowColor = accent;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, p.r, 0, Math.PI*2);
+          ctx.fill();
+        });
+        ctx.globalAlpha = 1; ctx.shadowBlur = 0;
+        if (alive) frame = requestAnimationFrame(tick);
+        else { pc.classList.remove('show'); ctx.clearRect(0,0,pc.width,pc.height) }
+      })();
+    }
+
+    // ── Live update ────────────────────────────────────────────────────────────
+    let dbTimer;
+    function liveConvert() { if (!imgEl) return; clearTimeout(dbTimer); dbTimer = setTimeout(doConvert, 280) }
+    ['r-w','r-b','r-c','r-sh','r-gam'].forEach(id => {
+      document.getElementById(id).addEventListener('input', liveConvert);
+    });
+
+    // ── Export ─────────────────────────────────────────────────────────────────
+    function doCopy() {
+      if (!lastAscii) { toast('Generate ASCII first'); return; }
+      navigator.clipboard.writeText(lastAscii)
+        .then(() => toast('Copied to clipboard!'))
+        .catch(() => { const ta=document.createElement('textarea'); ta.value=lastAscii; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta); toast('Copied!') });
+    }
+    function doTxt() {
+      if (!lastAscii) { toast('Generate ASCII first'); return; }
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(new Blob([lastAscii],{type:'text/plain'}));
+      a.download = 'ascii-art.txt'; a.click(); toast('Downloading .txt…');
+    }
+    function doPng() {
+      if (!lastAscii) { toast('Generate ASCII first'); return; }
+      const lines = lastAscii.split('\n');
+      const fsPx  = fs+2, lh=Math.ceil(fsPx*1.18), cw=fsPx*0.6;
+      const pw = Math.ceil(lines[0].length*cw)+32, ph = lines.length*lh+32;
+      const c  = document.createElement('canvas'); c.width=pw; c.height=ph;
+      const cx = c.getContext('2d');
+      const bgs={'out-dark':'#000','out-green':'#001500','out-light':'#f5f0e4','out-white':'#0d0d0d','out-blue':'#000d1a','out-pink':'#1a0010'};
+      const fgs={'out-dark':'#f5a623','out-green':'#33ff66','out-light':'#1a1a0f','out-white':'#fff','out-blue':'#60cfff','out-pink':'#ff6eb4'};
+      cx.fillStyle = bgs[theme]||'#000'; cx.fillRect(0,0,pw,ph);
+      if (colorMode && lastPixels) {
+        const { colors, cols } = lastPixels;
+        cx.font = fsPx+'px "IBM Plex Mono",monospace'; cx.textBaseline='top';
+        lines.forEach((row,y) => {
+          for (let x=0; x<row.length; x++) {
+            const ci=(y*cols+x)*3;
+            cx.fillStyle=`rgb(${colors[ci]},${colors[ci+1]},${colors[ci+2]})`;
+            cx.fillText(row[x], 16+x*cw, 16+y*lh);
+          }
+        });
+      } else {
+        cx.fillStyle = fgs[theme]||'#f5a623';
+        cx.font = fsPx+'px "IBM Plex Mono",monospace'; cx.textBaseline='top';
+        lines.forEach((l,i) => cx.fillText(l, 16, 16+i*lh));
+      }
+      const a=document.createElement('a'); a.href=c.toDataURL('image/png'); a.download='ascii-art.png'; a.click();
+      toast('Downloading PNG…');
+    }
+    function doHtml() {
+      if (!lastAscii) { toast('Generate ASCII first'); return; }
+      const bgs={'out-dark':'#000','out-green':'#001500','out-light':'#f5f0e4','out-white':'#0d0d0d','out-blue':'#000d1a','out-pink':'#1a0010'};
+      const fgs={'out-dark':'#f5a623','out-green':'#33ff66','out-light':'#1a1a0f','out-white':'#fff','out-blue':'#60cfff','out-pink':'#ff6eb4'};
+      let body = '';
+      if (colorMode && lastPixels) {
+        const { colors, cols } = lastPixels;
+        lastLines.forEach((row, y) => {
+          for (let x=0; x<row.length; x++) {
+            const ci=(y*cols+x)*3;
+            body += `<span style="color:rgb(${colors[ci]},${colors[ci+1]},${colors[ci+2]})">${row[x]==='<'?'&lt;':row[x]}</span>`;
+          }
+          body += '\n';
+        });
+      } else {
+        body = lastAscii.replace(/&/g,'&amp;').replace(/</g,'&lt;');
+      }
+      const html = `<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><title>ASCII Art</title>
+<style>body{margin:0;background:${bgs[theme]||'#000'};padding:1rem}pre{font-family:"IBM Plex Mono",monospace;font-size:${fs}px;line-height:1.18;color:${fgs[theme]||'#f5a623'}}</style>
+</head><body><pre>${body}</pre></body></html>`;
+      const a=document.createElement('a');
+      a.href=URL.createObjectURL(new Blob([html],{type:'text/html'}));
+      a.download='ascii-art.html'; a.click(); toast('Downloading HTML…');
+    }
+
+    // ── Toast ──────────────────────────────────────────────────────────────────
+    let toastT;
+    function toast(msg) {
+      const el = document.getElementById('toast');
+      el.textContent = msg; el.classList.add('show');
+      clearTimeout(toastT); toastT = setTimeout(() => el.classList.remove('show'), 2200);
+    }
+
+    // ── Matrix rain ────────────────────────────────────────────────────────────
+    (function initMatrix() {
+      const c    = document.getElementById('matrix-bg');
+      const wrap = document.getElementById('ascii-wrap');
+      function resize() { c.width=wrap.clientWidth; c.height=wrap.clientHeight }
+      resize(); new ResizeObserver(resize).observe(wrap);
+      const ctx   = c.getContext('2d');
+      const chars = '01アイウエオカキクケコ@#%&+=-';
+      let cols, drops;
+      function init() {
+        cols  = Math.floor(c.width/14);
+        drops = Array(cols).fill(0).map(()=>Math.random()*c.height/14|0);
+      }
+      init(); new ResizeObserver(init).observe(wrap);
+      setInterval(() => {
+        const accent = getComputedStyle(document.documentElement).getPropertyValue('--amber').trim()||'#f5a623';
+        ctx.fillStyle='rgba(0,0,0,0.06)'; ctx.fillRect(0,0,c.width,c.height);
+        ctx.fillStyle=accent; ctx.globalAlpha=0.7; ctx.font='12px "IBM Plex Mono",monospace';
+        drops.forEach((y,i)=>{
+          ctx.fillText(chars[Math.random()*chars.length|0], i*14, y*14);
+          if (y*14>c.height && Math.random()>0.975) drops[i]=0;
+          drops[i]++;
+        });
+        ctx.globalAlpha=1;
+      }, 80);
+    })();
+
+    // ── Init ───────────────────────────────────────────────────────────────────
+    window.addEventListener('DOMContentLoaded', () => {
+      initAccentColor();
+      rui(document.getElementById('r-w'),    'lw',     v=>v+' cols');
+      rui(document.getElementById('r-b'),    'lb',     v=>(v>0?'+':'')+v);
+      rui(document.getElementById('r-c'),    'lc',     v=>(v/100).toFixed(1)+'×');
+      rui(document.getElementById('r-sh'),   'lsh',    v=>v+'%');
+      rui(document.getElementById('r-gam'),  'lgam',   v=>(v/100).toFixed(1));
+      rui(document.getElementById('r-fs'),   'lfs',    v=>v+'px');
+      rui(document.getElementById('r-ls'),   'lls',    v=>(v/100).toFixed(2)+'em');
+      rui(document.getElementById('r-speed'),'l-speed',v=>['Slowest','Slow','Medium','Fast','Turbo'][v-1]);
+    });
+  </script>
+</body>
+</html>
