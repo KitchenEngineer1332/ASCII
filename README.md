@@ -2,6 +2,12 @@
 
 A high-performance, visually sophisticated web application for converting images into ASCII art. Features real-time preview, multiple output formats, customizable rendering options, and a professional dark-themed interface with matrix rain animations.
 
+## Video Preview
+
+https://github.com/user-attachments/assets/c76c6078-4b01-41f4-9588-04a8594df2f2
+
+
+
 ## Features
 
 - Image-to-ASCII conversion with live preview
