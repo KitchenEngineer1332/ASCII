@@ -13,15 +13,13 @@
   <div id="toast"></div>
   <canvas id="canvas"></canvas>
   <input type="file" id="file-input" accept="image/*">
-
-  <!-- ── Sidebar ──────────────────────────────────────────────── -->
+  <!-- Sidebar -->
   <aside id="sidebar">
     <div class="sb-header">
       <div class="logo-eyebrow">// terminal_ascii · v3.0</div>
       <div class="logo" data-text="ASCII ART GEN">ASCII ART GEN</div>
       <span class="logo-sub">pixel → character → art</span>
     </div>
-
     <!-- Upload -->
     <div class="sb-section fixed">
       <div class="section-label">Input Image</div>
@@ -42,10 +40,8 @@
         <div class="preview-bar"><span id="fname">—</span><span id="fdims">—</span></div>
       </div>
     </div>
-
     <!-- Scrollable settings -->
     <div class="sb-section scrollable">
-
       <!-- Resolution -->
       <div class="sb-subsection">
         <div class="section-label">Resolution</div>
@@ -64,7 +60,6 @@
             oninput="rui(this,'lls',v=>(v/100).toFixed(2)+'em');setLetterSpacing(+this.value)">
         </div>
       </div>
-
       <!-- Adjustments -->
       <div class="sb-subsection">
         <div class="section-label">Adjustments</div>
@@ -109,7 +104,6 @@
           </div>
         </div>
       </div>
-
       <!-- Filter -->
       <div class="sb-subsection">
         <div class="section-label">Filter Mode</div>
@@ -128,7 +122,6 @@
           </div>
         </div>
       </div>
-
       <!-- Style -->
       <div class="sb-subsection">
         <div class="section-label">Style</div>
@@ -174,7 +167,6 @@
           </div>
         </div>
       </div>
-
       <!-- Animation -->
       <div class="sb-subsection">
         <div class="section-label">Generation</div>
@@ -192,9 +184,7 @@
             oninput="rui(this,'l-speed',v=>['Slowest','Slow','Medium','Fast','Turbo'][v-1])">
         </div>
       </div>
-
-    </div><!-- end scrollable -->
-
+    </div>
     <!-- Convert + stats -->
     <div class="sb-section fixed">
       <button id="convert-btn" onclick="doConvert()" disabled>▶ &nbsp;Generate ASCII</button>
@@ -211,8 +201,7 @@
     </div>
 
   </aside>
-
-  <!-- ── Main output ─────────────────────────────────────────── -->
+  <!--Main output-->
   <main id="main">
     <div id="out-topbar">
       <div class="out-led idle" id="out-led"></div>
@@ -225,7 +214,6 @@
         <button class="zoom-btn" onclick="resetZoom()" title="Reset zoom" style="font-size:8px;padding:2px 5px">RST</button>
       </div>
     </div>
-
     <div id="out-toolbar">
       <button class="t-btn" onclick="doCopy()">
         <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.3">
@@ -266,23 +254,19 @@
       <div class="tsep"></div>
       <span class="s-pill s-idle" id="status">IDLE</span>
     </div>
-
     <div id="ascii-wrap">
       <canvas id="matrix-bg"></canvas>
       <div id="scan-sweep"></div>
       <div id="gen-cursor"></div>
       <canvas id="particle-canvas"></canvas>
-
       <!-- Split view overlays -->
       <div id="image-overlay"><img id="split-img" alt=""></div>
       <div id="split-divider"></div>
-
       <div id="loading">
         <div class="ld-bar"><div class="ld-bar-fill" id="ld-fill"></div></div>
         <div class="ld-row-count" id="ld-rows">Initialising…</div>
         <div class="ld-label">Generating</div>
       </div>
-
       <div id="placeholder">
         <pre class="ph-art">
  ██████  ██████  ██████  ███████
@@ -293,11 +277,9 @@
         </pre>
         <div class="ph-msg"><span>Upload an image to begin</span><span class="ph-cursor"></span></div>
       </div>
-
       <pre id="ascii-output" class="out-dark" style="display:none;font-size:7px"></pre>
     </div>
   </main>
-
   <script src="script.js"></script>
 </body>
 </html>
