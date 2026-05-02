@@ -126,6 +126,12 @@ Eight one-click presets that set width, brightness, contrast, gamma, sharpening,
 - Fuzzy-search all available actions
 - Keyboard-navigable with arrow keys and Enter
 
+## Video Demo
+
+
+https://github.com/user-attachments/assets/e69602c2-11d8-4f01-b17d-e329484b6403
+
+
 ### Keyboard Shortcuts
 | Key | Action |
 |---|---|
